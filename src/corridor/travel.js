@@ -35,6 +35,10 @@ export function mountTravel({ corridor, home, teleport }) {
     const m = corridor.myeongdong;
     dests.push({ id: 'myeongdong', en: 'Myeongdong', ko: '명동', x: m.spawn.x, z: m.spawn.z, face: () => m.face, line: '4호선', getYAt: (x, z) => m.surfaceY(x, z) ?? m.spawnY() });
   }
+  if (corridor.seongsu) { // [seongsu] 하우스 노웨어 서울 정문 앞 (2호선 성수역에서 걸어서 10분)
+    const m = corridor.seongsu;
+    dests.push({ id: 'seongsu', en: 'Seongsu · Haus Nowhere', ko: '성수 · 하우스 노웨어', x: m.spawn.x, z: m.spawn.z, face: () => m.face, line: '2호선', getYAt: (x, z) => m.surfaceY(x, z, 0.05) ?? m.spawnY() });
+  }
   if (corridor.hangang) {
     const h = corridor.hangang;
     dests.push({ id: 'hangang', en: 'Banpo Hangang Park', ko: '반포한강공원', x: h.spawn.x, z: h.spawn.z, getY: () => h.spawnY() });
@@ -64,7 +68,7 @@ export function mountTravel({ corridor, home, teleport }) {
       const b = document.createElement('button'); b.type = 'button';
       const site = d.id === 'lotte' ? lotteSiteLabel(en) : null; // 오픈 전: 건설중 공정률
       b.innerHTML = site ? `<span>🚧 ${site.main}</span><span class="ko">${site.sub}</span>`
-        : `<span>${d.id === 'lotte' || d.id === 'ntower' || d.id === 'myeongdong' ? '🏙️' : (d.id === 'hangang' || d.id === 'tancheon-hap' || d.id === 'jamwon') ? '🌉' : '🚇'} ${en ? d.en : d.ko}</span><span class="ko">${en ? d.ko : d.en}</span>`;
+        : `<span>${d.id === 'lotte' || d.id === 'ntower' || d.id === 'myeongdong' || d.id === 'seongsu' ? '🏙️' : (d.id === 'hangang' || d.id === 'tancheon-hap' || d.id === 'jamwon') ? '🌉' : '🚇'} ${en ? d.en : d.ko}</span><span class="ko">${en ? d.ko : d.en}</span>`;
       b.onclick = () => go(d.id);
       panel.appendChild(b);
     }

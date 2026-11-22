@@ -150,11 +150,14 @@ function finishHangang({ scene, overlay, terrain, dem, osm, hap, foreign, root, 
       if (y == null || y > cap) continue;
       if (best == null || y > best) best = y;
     }
+    // [v4b] 다 너무 높으면(옹벽·둑) 예전엔 null → 코리더 기본 바닥(y 0)이 대신 잡혀 '허공 평면'을 걷거나 엉뚱하게 막혔다.
+    //   한강 땅 안에서는 그 자리 땅 높이를 돌려준다(벽이면 canMove 가 단차로 막는다).
+    if (best == null && ys.length) best = Math.min(...ys);
     return best;
   }
 
   if (terrain?.addGroundSurface) {
-    terrain.addGroundSurface((x, z, refY) => surfaceY(x, z, refY));
+    terrain.addGroundSurface((x, z, refY) => surfaceY(x, z, refY), { authoritative: true }); // [v4b] 한강 땅은 그 땅이 바닥
   }
 
   const unwatch = watchEvening((on) => {

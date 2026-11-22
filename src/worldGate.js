@@ -520,7 +520,7 @@ export function openWorldGate({ onEnter }) {
         { country: 'KR', open: true, n: stationsOf(getRegion('jeongja')), html: corridorListHtml },
         ...OPEN_REGIONS.filter((r) => r.id !== 'jeongja').map((r) => ({ country: countryOf(r), open: live || r.id !== 'starbase', n: stationsOf(r), html: openItem(r) })),
         ...openBranches.map((r) => ({ country: countryOf(r), open: true, n: 1, html: branchOpenItem(r) })),
-        ...UPCOMING_REGIONS.filter((r) => !CORRIDOR_STATION_IDS.has(r.id)).map((r) => ({ country: countryOf(r), open: false, n: 1, html: upcomingItem(r) })),
+        ...UPCOMING_REGIONS.filter((r) => !CORRIDOR_STATION_IDS.has(r.id) && !OPEN_BRANCH_IDS.has(r.id)).map((r) => ({ country: countryOf(r), open: false, n: 1, html: upcomingItem(r) })),
       ];
       const order = [...new Set(['KR', 'US', ...entries.map((x) => x.country)])].filter((c) => entries.some((x) => x.country === c));
       regionsListEl.innerHTML = order.map((c) => {

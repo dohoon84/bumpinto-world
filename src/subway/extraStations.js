@@ -38,4 +38,28 @@ export const EXTRA_STATIONS = [
       { ref: '2', osm: 3408315044, lat: 37.4476886, lon: 127.0549909, place: { x: -4720.9, z: -8974.6, ry: -2.692, shift: 0, bad: 0 } },
     ],
   },
+  // [seongsu] 성수 — 2호선 지상(고가) 역 (지상 3층: 2층 대합실 · 3층 2면 4선 쌍섬식 승강장). elevated → 출입구는 길에서 올라가는 계단+에스컬레이터,
+  //   승강장은 고가 승강장 장면(하늘·아차산로가 보임). 대합실은 다른 역 틀 + 창. 출입구 4곳은 OSM subway_entrance 자리.
+  //   ext: 'seongsu' → ?seongsu=0 / ?seongsusub=0 이면 빠진다. 좌표 = public/corridor/seongsu/seongsu.json (scripts/corridor/build-seongsu.py)
+  {
+    id: 'seongsu',
+    name: '성수',
+    elevated: true,
+    nameEn: 'Seongsu',
+    x: -4622.6,
+    z: -19683.7,
+    osmStations: [5935554450],
+    lines: ['l2'],
+    osmLineColours: { l2: '#00A23F' },
+    osmRoutes: { l2: [4729409] },
+    route: { line: 'l2', rel: 4729409, stops: ['한양대', '뚝섬', '성수', '건대입구', '구의', '강변', '잠실나루', '잠실'] },
+    ext: 'seongsu',
+    exits: [
+      // [seongsu-elevated] place = 고가역 출입구: 인도(역 폭 밖 v=±15.9m) 위, OSM 출구 자리(길이 방향 a)에서 역 가운데 쪽으로 올라감
+      { ref: '1', osm: 3404887383, lat: 37.5450398, lon: 127.0551237, place: { x: -4710.1, z: -19733.1, ry: 1.215, shift: 0, bad: 0 } },
+      { ref: '2', osm: 3404887385, lat: 37.5444263, lon: 127.0570324, place: { x: -4539.6, z: -19669.8, ry: -1.926, shift: 0, bad: 0 } },
+      { ref: '3', osm: 3404887386, lat: 37.5441528, lon: 127.0569174, place: { x: -4549.7, z: -19639.7, ry: -1.926, shift: 0, bad: 0 } },
+      { ref: '4', osm: 3404887384, lat: 37.5447446, lon: 127.0550065, place: { x: -4719.6, z: -19702.8, ry: 1.215, shift: 0, bad: 0 } },
+    ],
+  },
 ];

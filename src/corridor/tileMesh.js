@@ -250,6 +250,7 @@ export function makeBuildingMeshAcc(seed0) {
     if (b.s === 'default') c.offsetHSL(0, -0.05, 0.02);
     roof.copy(c).offsetHSL(0, -0.05, -0.12);
     wallTint.setRGB(0.93 + c.r * 0.07, 0.93 + c.g * 0.07, 0.93 + c.b * 0.07);
+    if (b.tint) wallTint.set(b.tint); // [seongsu-v3] 필지별 외벽색(기존 호출엔 영향 없음)
     const nrm = g.attributes.normal, cols = new Float32Array(nrm.count * 3);
     for (let i = 0; i < nrm.count; i++) {
       const ny = nrm.getY(i), cc = ny > 0.5 ? roof : ny < -0.5 ? c : wallTint;

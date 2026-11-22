@@ -21,6 +21,60 @@ export const stairY = (z) => Math.max(0, Math.min(STEP.n, (STEP.z0 - z) / STEP.d
 // 계단 안 걸을 수 있는 곳 (승강장 바닥과 겹치게 — 사이에 틈이 있으면 입구에서 막힘)
 export const inStairArea = (x, z, r = 0.3) => x > PLAT.STAIR.x0 + r && x < PLAT.STAIR.x1 - r && z <= PLAT.Z0 + 0.6 && z > PLAT.Z0 - PLAT.STAIR.depth + 0.4 + r;
 
+// [seongsu-elevated] 고가 승강장 바깥 (S 빌더 하나에 같이 쌓음 → draw call 그대로)
+//   z>0 쪽: 내 선로(TRACK_Z) · 건너 본선 · 건너편 섬식 승강장(지붕·스크린도어) · 측선 → 그 너머 길·건물
+//   z<0 쪽: 승강장 지붕 · 뒤 난간 너머로 아차산로 · 고가 교각. 땅 = 승강장 바닥에서 GROUND 아래
+export const ELV_FAR = Object.freeze({ track2: 5.6, edge: 7.3, z1: 11.3, track4: 13.1, para: 14.8, GROUND: -10.2 });
+function buildElevated(S, { half, TUN, Z0, CEIL, TRACK_Z, color }) {
+  const LEN = half * 2 + TUN * 2, F = ELV_FAR, G0 = F.GROUND;
+  // 고가 상판 (선로 바닥 아래) · 가장자리 녹색 띠 · 교각 (2열, 20m마다)
+  S.block(0, -2.6, (Z0 - 1.6 + F.para + 0.6) / 2, LEN, 1.15, F.para + 0.6 - Z0 + 1.6, '#a9aca6');
+  S.block(0, -2.25, Z0 - 1.65, LEN, 0.5, 0.06, '#2f8f4e'); S.block(0, -2.25, F.para + 0.65, LEN, 0.5, 0.06, '#2f8f4e');
+  for (let x = -LEN / 2 + 6; x < LEN / 2; x += 20) for (const z of [-2.4, 11.5]) { S.block(x, G0, z, 1.5, -2.6 - G0, 1.7, '#b4b5ae'); S.block(x, -3.4, z, 2.4, 0.8, 2.4, '#a5a69f'); }
+  // 건너 본선 + 측선 (자갈·침목·레일)
+  for (const tz of [F.track2, F.track4]) {
+    S.block(0, -1.45, tz, LEN, 0.2, 3.4, '#3b3a37');
+    for (const s of [-0.75, 0.75]) S.block(0, -1.25, tz + s, LEN, 0.16, 0.08, '#8a8f94');
+    for (let x = -LEN / 2; x < LEN / 2; x += 2.4) S.block(x, -1.3, tz, 0.25, 0.06, 2.4, '#55524c');
+  }
+  // 승강장 지붕 (내 승강장 + 건너편) — 가운데 기둥 줄, 가장자리 녹색 띠
+  for (const [z0, z1] of [[Z0 - 0.4, 0.7], [F.edge - 0.7, F.z1 + 0.4]]) {
+    S.block(0, CEIL, (z0 + z1) / 2, half * 2 + 2, 0.22, z1 - z0, '#e2e4e1');
+    for (const z of [z0, z1]) S.block(0, CEIL - 0.25, z, half * 2 + 2, 0.32, 0.08, color);
+  }
+  for (let x = -half + 6; x < half; x += 12) S.block(x, -0.3, (F.edge + F.z1) / 2, 0.36, CEIL + 0.3, 0.36, '#e9ecef');
+  for (let x = -half + 6; x < half; x += 12) if (Math.abs(x) > 3.5) S.block(x, -0.3, Z0 + 0.6, 0.3, CEIL + 0.3, 0.3, '#e9ecef');
+  // 건너편 섬식 승강장: 바닥 · 양쪽 스크린도어 (닫힌 유리 판 + 녹색 위 띠) · 의자
+  S.block(0, -1.45, (F.edge + F.z1) / 2, half * 2, 1.45, F.z1 - F.edge, '#b9b4aa');
+  for (const z of [F.edge, F.z1]) {
+    S.block(0, 0, z, half * 2 - 0.8, 2.05, 0.08, '#8fa9b6');
+    S.block(0, 2.05, z, half * 2 - 0.8, 0.32, 0.12, '#30363b');
+    S.block(0, 2.2, z + (z === F.edge ? -0.07 : 0.07), half * 2 - 0.8, 0.07, 0.02, color);
+    for (let x = -half + 1; x < half - 0.5; x += 3.5) S.block(x, 0, z, 0.1, 2.05, 0.12, '#59636b');
+  }
+  for (let x = -half + 12; x < half - 6; x += 24) S.block(x, 0, (F.edge + F.z1) / 2, 3.2, 0.45, 0.5, '#8d6e4f');
+  // 바깥 난간 (상판 양쪽 끝)
+  S.block(0, -1.45, F.para, LEN, 1.2, 0.25, '#d0d2cc'); S.block(0, -1.45, Z0 - 1.55, LEN, 1.15, 0.25, '#d0d2cc');
+  // 아래: 아차산로 (고가 밑 8차로) · 보도 · 차선 · 길가 건물 (성수동 붉은 벽돌·회색 콘크리트)
+  S.block(0, G0 - 0.3, 4.5, LEN + 160, 0.3, 40, '#5a5d60');
+  for (const z of [-6, 2, 9, 16]) for (let x = -LEN / 2 - 60; x < LEN / 2 + 60; x += 9) S.block(x, G0 + 0.002, z, 4, 0.01, 0.18, '#e9ecef');
+  S.block(0, G0 + 0.004, 4.5, LEN + 160, 0.01, 0.3, '#f2c230');
+  for (const sz of [-1, 1]) S.block(0, G0 - 0.3, 4.5 + sz * 25, LEN + 160, 0.45, 10, '#b9b3a8');
+  const BR = ['#a1543f', '#8f4a3b', '#b8b3a8', '#c9c2b4', '#7c7f80', '#b06b4b', '#d8d2c4'];
+  let k = 0;
+  for (const sz of [-1, 1]) for (let x = -LEN / 2 - 70; x < LEN / 2 + 70; k++) {
+    const w = 9 + ((k * 37) % 11), h = 7 + ((k * 53) % 17), d = 12 + ((k * 29) % 8), z = 4.5 + sz * (30 + d / 2), c = BR[k % BR.length];
+    S.block(x + w / 2, G0, z, w - 0.8, h, d, c);
+    S.block(x + w / 2, G0 + 0.2, z - sz * (d / 2 + 0.02), w - 1.6, 2.6, 0.04, '#2c3238');               // 1층 가게 유리
+    for (let y = G0 + 4; y < G0 + h - 1; y += 3.2) S.block(x + w / 2, y, z - sz * (d / 2 + 0.02), w - 2.4, 1.3, 0.04, '#43515b'); // 창 띠
+    x += w;
+  }
+  // 고가 밑 가로수 · 몇 대의 차
+  for (let x = -LEN / 2; x < LEN / 2; x += 18) for (const sz of [-1, 1]) { S.block(x, G0, 4.5 + sz * 21.5, 0.25, 3, 0.25, '#6e5943'); S.box(x, G0 + 4, 4.5 + sz * 21.5, 2.6, 2.4, 2.6, '#7d964c'); }
+  const CARS = ['#e9ecef', '#2b2f33', '#9aa3ab', '#3a5f8f', '#c92a2a'];
+  for (let i = 0; i < 14; i++) { const x = -LEN / 2 + 20 + i * 17.3, z = [-8, -1, 6, 13][i % 4], c = CARS[i % CARS.length]; S.block(x, G0, z, 4.4, 1.0, 1.8, c); S.block(x - 0.3, G0 + 1.0, z, 2.4, 0.6, 1.6, c); }
+}
+
 // def: stationsData 역, line: 노선 키, dir: 0/1, feed: createArrivalFeed (raw()), arrival: { at, run } 이미 서 있는 열차(하차) 또는 null
 //   onEvent(kind, data): 'board' {door, run, live} · 'up' · 'say' {ko,en}
 export function buildPlatform({ def, line, dir, renderer, look, feed = null, arrival = null, spawnDoor = null, onEvent = () => {}, now = () => Date.now(), rides: ridesIn = null, lang = () => 'ko', routeMap = true }) {
@@ -28,9 +82,13 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
   const rides = ridesIn ?? rideStops(line, dir, def.name);
   const zone = platformZone(def.id, line, dir);
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#15171a');
-  scene.add(new THREE.HemisphereLight('#ffffff', '#8d877c', 2.0));
-  const dl = new THREE.DirectionalLight('#fff6e8', 0.5); dl.position.set(4, 20, -8); scene.add(dl);
+  // [seongsu-elevated] 고가역(def.elevated): 하늘·바깥 빛, 터널·천장·선로 건너 벽 대신 승강장 지붕 + 건너편 섬식 승강장 + 아래로 보이는 길
+  const ELV = !!def.elevated;
+  scene.background = new THREE.Color(ELV ? '#cfdfe8' : '#15171a');
+  if (ELV) scene.fog = new THREE.Fog('#d5e2ea', 70, 260);
+  scene.add(new THREE.HemisphereLight('#ffffff', ELV ? '#a59d8c' : '#8d877c', ELV ? 1.75 : 2.0));
+  const dl = new THREE.DirectionalLight('#fff6e8', ELV ? 1.5 : 0.5); dl.position.set(4, 20, -8); scene.add(dl);
+  const sY = ELV ? (z) => -stairY(z) : stairY; // 고가역 계단은 승강장(3층)에서 대합실(2층)로 내려간다
   const disposables = [];
   const S = createBuilder(), G = createBuilder();
   const atlas = createAtlas(2048, 1024, 'platform');
@@ -44,24 +102,51 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
   S.block(0, -1.45, (0 + WALL_Z) / 2, half * 2 + TUN * 2, 0.2, WALL_Z, '#3b3a37'); // 선로 바닥
   for (const s of [-0.75, 0.75]) S.block(0, -1.25, TRACK_Z + s, half * 2 + TUN * 2, 0.16, 0.08, '#8a8f94'); // 레일
   for (let x = -half - TUN; x < half + TUN; x += 1.2) S.block(x, -1.3, TRACK_Z, 0.25, 0.06, 2.4, '#55524c'); // 침목
-  S.block(0, -1.45, WALL_Z + 0.2, half * 2 + TUN * 2, CEIL + 1.6, 0.4, '#5c6166');  // 선로 건너 벽
-  S.block(0, CEIL, (Z0 + WALL_Z) / 2, half * 2 + TUN * 2, 0.3, WALL_Z - Z0, '#d3d6d9'); // 천장
+  if (!ELV) {
+    S.block(0, -1.45, WALL_Z + 0.2, half * 2 + TUN * 2, CEIL + 1.6, 0.4, '#5c6166');  // 선로 건너 벽
+    S.block(0, CEIL, (Z0 + WALL_Z) / 2, half * 2 + TUN * 2, 0.3, WALL_Z - Z0, '#d3d6d9'); // 천장
+  } else buildElevated(S, { half, TUN, Z0, CEIL, TRACK_Z, color: L.color });
   // 뒷벽: 계단 입구(STAIR.x0~x1) 자리는 비워 둠 — 예전엔 통짜 벽이 입구를 막았음 (도훈 피드백)
-  for (const [a, b] of [[-half, STAIR.x0 - 0.4], [STAIR.x1 + 0.4, half]]) S.block((a + b) / 2, -0.3, Z0 - 0.2, b - a, CEIL + 0.6, 0.4, '#e6e1d8', { shade: (y) => (y < 0 ? 0.85 : 1) });
+  //   고가역: 뒷벽 = 낮은 난간벽(1.1m) + 방풍 기둥·가로대 (밖으로 아차산로가 보임)
+  const BACK_H = ELV ? 1.4 : CEIL + 0.6;
+  for (const [a, b] of [[-half, STAIR.x0 - 0.4], [STAIR.x1 + 0.4, half]]) S.block((a + b) / 2, -0.3, Z0 - 0.2, b - a, BACK_H, 0.4, ELV ? '#d9dbd6' : '#e6e1d8', { shade: (y) => (y < 0 ? 0.85 : 1) });
+  if (ELV) for (const [a, b] of [[-half, STAIR.x0 - 0.4], [STAIR.x1 + 0.4, half]]) {
+    S.block((a + b) / 2, 2.15, Z0 - 0.2, b - a, 0.08, 0.1, '#5d666e');                 // 방풍 가로대
+    for (let x = a + 0.1; x < b; x += 4) S.block(x, 1.1, Z0 - 0.2, 0.12, CEIL - 1.1, 0.12, '#5d666e');
+  }
   for (const s of [-1, 1]) {
-    S.block(s * (half + 0.2), -0.3, Z0 / 2, 0.4, CEIL + 0.6, -Z0, '#c9c4ba');     // 승강장 끝 벽
-    S.block(s * (half + TUN / 2), -1.45, 2.0, TUN, CEIL + 1.6, 0.3, '#2a2d30');    // 터널 안쪽 벽(어둡게) — 승강장 쪽
+    S.block(s * (half + 0.2), -0.3, Z0 / 2, 0.4, ELV ? 1.4 : CEIL + 0.6, -Z0, '#c9c4ba');     // 승강장 끝 벽 (고가: 낮은 난간)
+    if (!ELV) S.block(s * (half + TUN / 2), -1.45, 2.0, TUN, CEIL + 1.6, 0.3, '#2a2d30');    // 터널 안쪽 벽(어둡게) — 승강장 쪽
   }
   // 계단·에스컬레이터 입구 (뒷벽 가운데): 바닥 → 위로 올라가는 계단
   const SX0 = STAIR.x0, SX1 = STAIR.x1, SD = STAIR.depth;
   const SH = CEIL + 2.6; // 계단실 높이 (올라갈수록 머리 위 공간)
-  S.block(0, -0.3, Z0 - SD / 2, SX1 - SX0 + 0.4, 0.3, SD, '#a9a49a');
-  for (const s of [-1, 1]) S.block(s * ((SX1 - SX0) / 2 + 0.2), -0.3, Z0 - SD / 2, 0.4, SH, SD, '#d8d3ca');
-  for (let i = 0; i < STEP.n; i++) S.block(0, 0, STEP.z0 - (i + 0.5) * STEP.d, SX1 - SX0, (i + 1) * STEP.h, STEP.d, i % 2 ? '#8f8a80' : '#9b968c'); // 계단 (속이 찬 단 — 틈 없음)
-  for (const s of [-1, 1]) S.block(s * ((SX1 - SX0) / 2 - 0.08), 0.9, Z0 - SD / 2, 0.06, 0.06, SD, '#adb5bd');          // 난간
-  S.block(0, SH - 0.6, Z0 - SD / 2, SX1 - SX0 + 0.8, 0.3, SD, '#d3d6d9');                                                   // 계단실 천장
-  S.block(0, -0.3, Z0 - SD - 0.2, SX1 - SX0 + 0.8, SH, 0.4, '#cfcac0');                                                      // 계단 끝 벽
-  S.block(0, CEIL - 0.6, Z0 - 0.25, SX1 - SX0 + 0.4, SH - CEIL + 0.3, 0.5, '#e6e1d8');                                      // 입구 위 (표지판 자리)
+  if (!ELV) {
+    S.block(0, -0.3, Z0 - SD / 2, SX1 - SX0 + 0.4, 0.3, SD, '#a9a49a');
+    for (const s of [-1, 1]) S.block(s * ((SX1 - SX0) / 2 + 0.2), -0.3, Z0 - SD / 2, 0.4, SH, SD, '#d8d3ca');
+    for (let i = 0; i < STEP.n; i++) S.block(0, 0, STEP.z0 - (i + 0.5) * STEP.d, SX1 - SX0, (i + 1) * STEP.h, STEP.d, i % 2 ? '#8f8a80' : '#9b968c'); // 계단 (속이 찬 단 — 틈 없음)
+    for (const s of [-1, 1]) S.block(s * ((SX1 - SX0) / 2 - 0.08), 0.9, Z0 - SD / 2, 0.06, 0.06, SD, '#adb5bd');          // 난간
+    S.block(0, SH - 0.6, Z0 - SD / 2, SX1 - SX0 + 0.8, 0.3, SD, '#d3d6d9');                                                   // 계단실 천장
+    S.block(0, -0.3, Z0 - SD - 0.2, SX1 - SX0 + 0.8, SH, 0.4, '#cfcac0');                                                      // 계단 끝 벽
+    S.block(0, CEIL - 0.6, Z0 - 0.25, SX1 - SX0 + 0.4, SH - CEIL + 0.3, 0.5, '#e6e1d8');                                      // 입구 위 (표지판 자리)
+  } else {
+    // 고가역: 승강장 뒤로 내민 유리 계단실 — 대합실(2층)로 내려가는 계단. 바닥이 단마다 내려감 (sY)
+    const WS = SX1 - SX0, DN = STEP.n * STEP.h;
+    S.block(0, -0.3, (Z0 + STEP.z0) / 2, WS, 0.3, Z0 - STEP.z0 + 0.02, '#b2ada3');                                           // 계단 위 참
+    for (let i = 0; i < STEP.n; i++) S.block(0, -(i + 1) * STEP.h - 0.3, STEP.z0 - (i + 0.5) * STEP.d, WS, 0.3, STEP.d, i % 2 ? '#8f8a80' : '#9b968c');
+    for (let i = 0; i < STEP.n; i++) S.block(0, -(i + 1) * STEP.h - 0.003, STEP.z0 - i * STEP.d - 0.045, WS - 0.1, 0.012, 0.08, '#e0b400');
+    const zEnd = Z0 - SD, zLow = STEP.z0 - STEP.n * STEP.d;
+    S.block(0, -DN - 0.3, (zLow + zEnd) / 2, WS, 0.3, zLow - zEnd + 0.02, '#a9a49a');                                     // 아래 참
+    for (const s of [-1, 1]) {
+      S.block(s * (WS / 2 + 0.2), -DN - 0.3, Z0 - SD / 2, 0.4, DN + 1.4, SD, '#d8d3ca');                                // 옆벽 (아래는 콘크리트, 위는 난간 높이)
+      S.block(s * (WS / 2 + 0.2), 1.1, Z0 - SD / 2 - 0.2, 0.1, 1.5, SD - 0.4, '#8fa9b6');                                // 위 유리 칸막이
+      S.block(s * (WS / 2 - 0.08), 0.85, Z0 - SD / 2, 0.06, 0.06, SD, '#adb5bd');                                         // 난간
+    }
+    S.block(0, -DN - 0.3, zEnd - 0.2, WS + 0.8, DN + 2.6, 0.4, '#cfcac0');                                                 // 계단 끝 벽
+    S.block(0, -DN, zEnd + 0.03, WS - 0.6, 2.2, 0.04, '#2a3036');                                                          // 대합실로 가는 통로 (어둡게)
+    S.block(0, 2.6, Z0 - SD / 2, WS + 0.8, 0.18, SD + 0.4, '#e2e4e1');                                                     // 계단 지붕
+    S.block(0, CEIL - 0.6, Z0 - 0.25, WS + 0.4, 0.82, 0.5, '#e6e1d8');                                                     // 입구 위 (표지판 자리)
+  }
   // 기둥 (량 경계)
   const pillars = [];
   for (let c = 0; c <= lay.cars; c++) { const x = lay.trainLen / 2 - c * lay.carLen; if (Math.abs(x) < SX1 + 1) continue; pillars.push(x); S.block(x, 0, -3.3, 0.7, CEIL, 0.7, '#e9ecef'); S.box(x, 2.2, -3.3, 0.72, 0.18, 0.72, L.color); }
@@ -105,13 +190,18 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
   // 계단 위 '나가는 곳' + 반대 방면 안내
   const outUV = atlas.add(480, 90, (c, w, h) => {
     c.fillStyle = '#FFC20E'; c.fillRect(0, 0, w, h); c.fillStyle = '#111'; c.textBaseline = 'middle'; c.textAlign = 'left';
-    c.font = `800 32px ${FONT}`; c.fillText('나가는 곳 ↑', 16, 30); c.font = `600 19px ${FONT}`; c.fillText('Way Out · 대합실 Concourse', 18, 66);
+    c.font = `800 32px ${FONT}`; c.fillText(ELV ? '나가는 곳 ↓' : '나가는 곳 ↑', 16, 30); c.font = `600 19px ${FONT}`; c.fillText('Way Out · 대합실 Concourse', 18, 66);
   });
   // 승강장 끝 '관계자 외 출입금지'
   const staffUV = atlas.add(300, 60, (c, w, h) => { c.fillStyle = '#c92a2a'; c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `800 22px ${FONT}`; c.fillText('관계자 외 출입금지', w / 2, 22); c.font = `600 15px ${FONT}`; c.fillText('Staff only', w / 2, 46); });
   for (let x = -half + 18; x < half - 10; x += 36) {
-    G.quad(x, 2.85, Z0 + 0.02, 4.2, 1.0, '#ffffff', { uv: nbBack });                // 뒷벽 (승강장을 봄)
-    G.quad(x + 9, 1.9, WALL_Z - 0.01, 4.8, 1.13, '#ffffff', { ry: Math.PI, uv: nbWall }); // 선로 건너 벽 (승강장·열차 창을 봄)
+    if (ELV) { // 고가: 지붕에 매단 이름판 + 건너편 승강장 기둥 이름판
+      if (Math.abs(x) > SX1 + 2.5) { S.block(x, 2.3, Z0 + 0.35, 4.4, 1.15, 0.08, '#2d3338'); for (const s of [-1.8, 1.8]) S.block(x + s, 3.45, Z0 + 0.35, 0.05, CEIL - 3.45, 0.05, '#2d3338'); G.quad(x, 2.875, Z0 + 0.4, 4.2, 1.0, '#ffffff', { uv: nbBack }); }
+      G.quad(x + 9, 2.2, ELV_FAR.edge - 0.06, 4.8, 1.13, '#ffffff', { ry: Math.PI, uv: nbWall });
+    } else {
+      G.quad(x, 2.85, Z0 + 0.02, 4.2, 1.0, '#ffffff', { uv: nbBack });                // 뒷벽 (승강장을 봄)
+      G.quad(x + 9, 1.9, WALL_Z - 0.01, 4.8, 1.13, '#ffffff', { ry: Math.PI, uv: nbWall }); // 선로 건너 벽 (승강장·열차 창을 봄)
+    }
   }
   for (const d of lay.doors.filter((_, i) => i % 4 === 1)) G.quad(d.x + DOOR_W / 2 + 1.3, 2.3, -0.12, 2.3, 0.24, '#ffffff', { ry: Math.PI, uv: dirUV });
   G.quad(0, CEIL - 0.5, Z0 + 0.03, 3.6, 0.68, '#ffffff', { uv: outUV });
@@ -207,7 +297,7 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
   const stairPt = () => ({ x: (rnd() - 0.5) * 3, z: Z0 - 2.2 });
   function spawnWaiting(n) { // 문 앞 줄 서기 (계단에서 걸어와서)
     const dx = doorsX[Math.floor(rnd() * doorsX.length)], q = rnd() < 0.5 ? -1 : 1;
-    const s = stairPt(); n.mesh.position.set(s.x, stairY(s.z), s.z); n.mesh.visible = true;
+    const s = stairPt(); n.mesh.position.set(s.x, sY(s.z), s.z); n.mesh.visible = true;
     n.mode = 'walk'; n.path = [{ x: s.x, z: -4.2 }, { x: dx + q * 0.95, z: -1.3 - rnd() * 1.6 }]; n.then = 'wait'; n.door = dx;
   }
   function spawnBench(n) { // 의자에 앉아 기다리기
@@ -221,7 +311,7 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
     if (!tgt) return true;
     const dx = tgt.x - p.x, dz = tgt.z - p.z, d = Math.hypot(dx, dz);
     if (d < 0.08) { n.path.shift(); return !n.path.length; }
-    const st = Math.min(d, sp * dt); p.x += (dx / d) * st; p.z += (dz / d) * st; p.y = p.z < Z0 && Math.abs(p.x) < SX1 ? stairY(p.z) : 0;
+    const st = Math.min(d, sp * dt); p.x += (dx / d) * st; p.z += (dz / d) * st; p.y = p.z < Z0 && Math.abs(p.x) < SX1 ? sY(p.z) : 0;
     const want = Math.atan2(dx, dz); n.mesh.rotation.y += Math.atan2(Math.sin(want - n.mesh.rotation.y), Math.cos(want - n.mesh.rotation.y)) * Math.min(1, dt * 10);
     animateAvatar(n.mesh, sp, dt); return false;
   }
@@ -342,7 +432,7 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
       if (d) { boardedSent = true; ev = { board: { door: d, run: sched.run, live: !!sched.live, at: sched.at, t: tt, rides } }; }
     }
     if (p.z > -0.2 && !canBoard && doorsOpen < 0.85) p.z = Math.min(p.z, -0.46); // 문이 닫히면 밀려남
-    p.y = inStair(p.x, p.z) ? stairY(p.z) : 0; // 계단 오르내리기 (예전엔 y=0 그대로라 단에 파묻혀 끼임)
+    p.y = inStair(p.x, p.z) ? sY(p.z) : 0; // 계단 오르내리기 (예전엔 y=0 그대로라 단에 파묻혀 끼임)
     if (p.z > UP_Z + 1.2) upArmed = true;        // 계단 아래쪽(또는 승강장)에 한 번 서야 다시 올라가기 — 계단에서 막 내려온 직후 되돌아가지 않게
     if (upArmed && inStair(p.x, p.z) && p.z < UP_Z) { upArmed = false; ev = { up: true }; }
     updateNpcs(dt, mo, tt);
@@ -351,7 +441,7 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
     const eye = p.y + 1.55, bx = Math.sin(cam.yaw), bz = Math.cos(cam.yaw), cp = Math.cos(cam.pitch), spp = Math.sin(cam.pitch);
     let d = cam.dist;
     for (; d > 1.2; d -= 0.25) { const cx = p.x + bx * d * cp, cz = p.z + bz * d * cp; if (inRoom(cx, cz) || inStair(cx, cz)) break; }
-    camera.position.set(p.x + bx * d * cp, THREE.MathUtils.clamp(eye + d * spp, 0.4, CEIL - 0.25), p.z + bz * d * cp);
+    camera.position.set(p.x + bx * d * cp, THREE.MathUtils.clamp(eye + d * spp, ELV ? Math.min(0.4, p.y + 0.6) : 0.4, CEIL - 0.25), p.z + bz * d * cp);
     camera.lookAt(p.x - bx * 3 * cp, eye - 3 * spp, p.z - bz * 3 * cp);
     return { ...(ev || {}), motion: mo, eta };
   }

@@ -11,7 +11,7 @@ import { NIGHT_V2, nightFacade, nightKind, nightSeed } from './corridor/nightLig
 import { doosanGate } from './world/doosanGate.js'; // [night-buildings]
 import { addPostOfficeMarks } from './world/postOffice.js';
 import { addStationCafeCrowd } from './world/cafeCrowd.js';
-import { addPlaceSigns } from './world/signs.js';
+import { addPlaceSigns, setSignTier, clearSignCache } from './world/signs.js';
 import { shopBandHeight, bandTint, addGroundFloorShops } from './world/groundFloorShops.js'; // [shops]
 import { addInstancedTrees } from './world/trees.js';
 import { applyFacadeColour, tintFacadeShader } from './world/buildingColours.js'; // [colours]
@@ -95,9 +95,10 @@ export function pointInRing(x, z, r) {
 }
 
 export function* buildWorldGen(scene, data, region = null, opts = {}) {
-  const { shops = null, colours = null } = opts; // [shops] prepareShops() · [colours] prepareBuildingColours() 결과. 없으면 기존과 동일
+  const { shops = null, colours = null, isMobile = false, reuseData = false } = opts; // [shops] prepareShops() · [colours] prepareBuildingColours() 결과. 없으면 기존과 동일
+  setSignTier(isMobile); // [memory] 폰은 간판 캔버스를 절반 해상도로 (모양은 같음)
   const isJeongja = region ? !!region.features?.jeongjaBuildings : data.station?.name !== 'Starbase';
-  if (isJeongja) {
+  if (isJeongja && !reuseData) {
     addCafeSidewalks(data); // 역 보행망이 끊긴 카페 앞까지 인도
     placeJeongjaStationStarbucks(data);
     placeNobiosHotel(data);
@@ -319,19 +320,20 @@ export function* buildWorldGen(scene, data, region = null, opts = {}) {
   return { isBlocked, onRoad, walkPaths, cityWalkPaths, inWater, signPos: sp, bounds: { x0, x1, z0, z1 }, treeCount: treePts.length, ground, block, starbucksRooms, shops: shopsLayer, colours }; // [terrain] ground/block: terrain.build 가 하천 구간을 비운 형상으로 교체
 }
 
+// opts.step(fn): 생성기 한 걸음을 감싸 실행(예: 저녁 감시자 모으기). 없으면 그냥 실행
 export function buildWorld(scene, data, region = null, opts = {}) {
-  const g = buildWorldGen(scene, data, region, opts);
-  let n = g.next();
-  while (!n.done) n = g.next();
+  const g = buildWorldGen(scene, data, region, opts), step = opts.step || ((f) => f());
+  let n = step(() => g.next());
+  while (!n.done) n = step(() => g.next());
   return n.value;
 }
 
 export async function buildWorldAsync(scene, data, region, opts, slicer) {
-  const g = buildWorldGen(scene, data, region, opts);
-  let n = g.next();
+  const g = buildWorldGen(scene, data, region, opts), step = opts?.step || ((f) => f());
+  let n = step(() => g.next());
   while (!n.done) {
     if (slicer) await slicer.tick(n.value || 'world');
-    n = g.next();
+    n = step(() => g.next());
   }
   return n.value;
 }
@@ -491,4 +493,14 @@ function paintFacade(x, key) {
   x.fillRect(128 - 16 - winW, winY, 10, winH);
   if (key === 'residential') { x.fillStyle = '#e7d3bf'; x.fillRect(10, 92, 108, 8); }
   x.fillStyle = band; x.fillRect(0, 108, 128, 20);
+}
+
+/** 매장 입장으로 텍스처를 내린 뒤, 모듈 캐시에 남은 죽은 재질을 비운다. 나오면 buildWorld 가 다시 만든다. */
+export function clearWorldVisualCaches() {
+  for (const m of facadeMats.values()) {
+    try { m.map?.dispose(); } catch { /* */ }
+    try { m.dispose(); } catch { /* */ }
+  }
+  facadeMats.clear();
+  try { clearSignCache(); } catch { /* */ }
 }

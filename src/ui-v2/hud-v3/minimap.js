@@ -36,6 +36,7 @@ let liveIdx = null; // { data, map: Map(chunkKey → feats) }
 let namsanIdx = null; // { mini, map }
 let myeongdongIdx = null; // [myeongdong] 명동은 지은 뒤 mini 가 생긴다
 let hangangIdx = null; // { mini, map }
+let seongsuIdx = null; // [seongsu-v4] 성수동은 지은 뒤 mini(길·건물·사옥·공원·한강) 가 생긴다
 const bboxOf = new WeakMap();
 const stats = { frames: 0, ms: 0, msMax: 0, chunkMs: 0, chunkRenders: 0, bytes: 0 };
 let onChange = () => {};
@@ -74,7 +75,7 @@ function close() {
   syncCornerPhone(false);
   // 닫으면 캐시 전부 버림(메모리 0). 다시 열면 보이는 청크만 다시 그린다(청크당 수 ms)
   for (const c of chunks.values()) { c.c.width = 0; c.c.height = 0; }
-  chunks.clear(); liveIdx = null; namsanIdx = null; hangangIdx = null; myeongdongIdx = null; stats.bytes = 0;
+  chunks.clear(); liveIdx = null; namsanIdx = null; hangangIdx = null; myeongdongIdx = null; seongsuIdx = null; stats.bytes = 0;
 }
 
 function build() {
@@ -107,6 +108,7 @@ function build() {
       const sx = (e.clientX - rect.left) * (cv.width / Math.max(1, rect.width));
       const sy = (e.clientY - rect.top) * (cv.height / Math.max(1, rect.height));
       const hit = navHits.find((h) => (h.sx - sx) ** 2 + (h.sy - sy) ** 2 < h.r * h.r);
+      if (hit?.depot && window.__jj?.depot?.guide?.()) return; // [depot-ext] 범창고 → 문 앞 안내
       if (hit && window.__jj?.bp24Nav?.guide?.(hit.id)) return; // [bp24nav] 매장 아이콘 → 문 앞 안내. 다른 클릭은 예전대로 위에서 보기
       if (hit?.arcade) {
         const pos = window.__jj?.player?.position;
@@ -220,8 +222,21 @@ function myeongdongFeats() {
   myeongdongIdx = { mini, map };
   return map;
 }
+function seongsuFeats() {
+  const mini = jj()?.seongsu?.mini; if (!mini || !mini.roads?.length) return null;
+  if (seongsuIdx?.mini === mini) return seongsuIdx.map;
+  const map = new Map();
+  for (const k of MINI_KINDS) for (const f of mini[k] || []) {
+    const [x0, z0, x1, z1] = bb(f); if (!Number.isFinite(x0)) continue;
+    for (let i = Math.floor(x0 / CHUNK); i <= Math.floor(x1 / CHUNK); i++) for (let j = Math.floor(z0 / CHUNK); j <= Math.floor(z1 / CHUNK); j++) {
+      const key = ck(i, j); let m = map.get(key); if (!m) map.set(key, (m = emptyFeats())); m[k].push(f);
+    }
+  }
+  seongsuIdx = { mini, map };
+  return map;
+}
 function landmarkFeats() {
-  const maps = [namsanFeats(), hangangFeats(), myeongdongFeats()].filter(Boolean);
+  const maps = [namsanFeats(), hangangFeats(), myeongdongFeats(), seongsuFeats()].filter(Boolean);
   if (!maps.length) return null;
   if (maps.length === 1) return maps[0];
   const out = new Map();
@@ -250,7 +265,8 @@ function verFor(i, j, T, data, N) {
   let v = data ? 'L' : '';
   if (T) for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) if (T.has(ck(i + di, j + dj))) v += `${di}${dj}`;
   if (N?.has(ck(i, j))) v += 'N';
-  if (myeongdongIdx?.map.has(ck(i, j))) v += 'M'; // [myeongdong] 명동이 지어지면 그 칸을 다시 그린다
+  if (myeongdongIdx?.map.has(ck(i, j))) v += 'M';
+  if (seongsuIdx?.map.has(ck(i, j))) v += 'S'; // [seongsu-v4] // [myeongdong] 명동이 지어지면 그 칸을 다시 그린다
   return v;
 }
 
@@ -315,6 +331,7 @@ function loop(now) {
 
 let headSm = null;
 function draw(now, J, P) {
+  if (J.depot?.active && J.depot.mmDraw) { drawDepotInside(J); return; } // [depot-live] 매장 안: 평면도 + 목적지 핀
   const x = P.position.x, z = P.position.z;
   const viewYaw = J.cam?.mode === 'overview' ? (J.ov?.yaw ?? 0) : (J.cam?.yaw ?? 0);
   const theta = prefs.rot ? viewYaw : 0; // 화면 회전각: 카메라 정면(-sin, -cos) 이 위로
@@ -442,6 +459,19 @@ function draw(now, J, P) {
     if (hover) { const d = (hover.x - sx) ** 2 + (hover.y - sy) ** 2; if (d < hovD) { hovD = d; hov = { sx, sy, t: st.name }; } }
   }
 
+  // [depot-ext] 범창고 아이콘(초록 사각 + 박스 마크) · 이름 · 누르면 문 앞 안내선
+  const dm = J.depot?.mapMarker;
+  if (dm) {
+    const [sx, sy] = toS(dm.x, dm.z);
+    if (inC(sx, sy, 2)) {
+      depotPulse(g, sx, sy, 10, 1); // [depot-live] 반짝이는 고리 — 바닥 화살표 대신 미니맵에서 눈에 띄게
+      drawDepotMark(g, sx, sy);
+      labels.push({ sx, sy: sy - 12, t: dm.label });
+      navHits.push({ sx, sy, r: 13, id: 'depot', name: dm.label, depot: true });
+      if (hover) { const d = (hover.x - sx) ** 2 + (hover.y - sy) ** 2; if (d < hovD) { hovD = d; hov = { sx, sy, t: dm.label }; } }
+    }
+  }
+
   // 목적지 (원 밖이면 테두리에 화살표)
   if (route?.dest) {
     const [sx, sy] = toS(route.dest.x, route.dest.z);
@@ -489,6 +519,15 @@ function draw(now, J, P) {
   updatePlaque(J, x, z);
   const ms = performance.now() - t0;
   stats.frames++; stats.ms = stats.ms ? stats.ms * 0.9 + ms * 0.1 : ms; if (stats.frames > 5) stats.msMax = Math.max(stats.msMax, ms);
+}
+function drawDepotInside(J) {
+  const dpr = Math.min(devicePixelRatio || 1, 2), W = Math.round(D * dpr);
+  if (cv.width !== W) { cv.width = W; cv.height = W; }
+  const g = ctx; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, D, D);
+  g.save(); g.beginPath(); g.arc(R, R, R, 0, Math.PI * 2); g.clip();
+  g.fillStyle = 'rgba(8, 16, 30, .9)'; g.fillRect(0, 0, D, D);
+  try { J.depot.mmDraw(g, R); } catch { /* */ }
+  g.restore(); sig = ''; setCompass(0);
 }
 let lastFull = 0, lastEvict = 0;
 function dropChunk(key) { const c = chunks.get(key); if (!c) return; stats.bytes -= c.c.width * c.c.height * 4; c.c.width = 0; c.c.height = 0; chunks.delete(key); }
@@ -538,6 +577,24 @@ function fitCableLabel(sx, sy, text) {
   [lx, ly] = clamp(lx, ly);
   return { sx: lx, sy: ly, t: text, fit: 1 };
 }
+function depotPulse(g, sx, sy, r0, k) { // 1.6초 주기 두 겹 고리 + 노란 후광 (할당 없음)
+  const t = (performance.now() % 1600) / 1600;
+  g.save();
+  g.globalAlpha = 0.35 + 0.25 * Math.sin(t * Math.PI * 2); g.fillStyle = '#F2C230'; g.beginPath(); g.arc(sx, sy, r0 + 3 * k, 0, Math.PI * 2); g.fill();
+  for (let o = 0; o < 1; o += 0.5) { const u = (t + o) % 1; g.globalAlpha = (1 - u) * 0.9; g.lineWidth = 2.4 * k; g.strokeStyle = '#F2C230'; g.beginPath(); g.arc(sx, sy, r0 + u * 14 * k, 0, Math.PI * 2); g.stroke(); }
+  g.restore();
+}
+function drawDepotMark(g, sx, sy) { // [depot-ext] 초록 사각 + 작은 상자(귀 없음)
+  g.save(); g.translate(sx, sy);
+  g.beginPath(); g.roundRect ? g.roundRect(-9, -8, 18, 16, 4) : g.rect(-9, -8, 18, 16); g.fillStyle = '#1E5A45'; g.fill();
+  g.lineWidth = 1.6; g.strokeStyle = '#F3EADA'; g.stroke();
+  g.lineJoin = 'round'; g.lineWidth = 0.9; g.strokeStyle = '#123B2D';
+  const poly = (pts, fill) => { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); g.fillStyle = fill; g.fill(); g.stroke(); };
+  poly([[0, -5.5], [5, -3.4], [0, -1.3], [-5, -3.4]], '#E0B47A');
+  poly([[-5, -3.4], [0, -1.3], [0, 5], [-5, 3]], '#C99A5E');
+  poly([[0, -1.3], [5, -3.4], [5, 3], [0, 5]], '#B8864C');
+  g.restore();
+}
 function drawCableMark(g, sx, sy) {
   g.beginPath(); g.arc(sx, sy, 7.2, 0, Math.PI * 2); g.fillStyle = '#0b1424'; g.fill();
   g.beginPath(); g.arc(sx, sy, 5.8, 0, Math.PI * 2); g.fillStyle = '#e8b44c'; g.fill();
@@ -558,13 +615,19 @@ function updatePlaque(J, x, z) {
   let t;
   const nt = J.namsan?.tower;
   const nd = nt ? Math.hypot((nt.ox ?? nt.x) - x, (nt.oz ?? nt.z) - z) : Infinity;
+  // [v4b] 늦게 짓는 동네(성수·한강)는 역 목록에 없어 '분당'으로 떨어졌다 → 땅 주인 먼저, 그다음 아무 역(4 km), 마지막에 지역 이름
+  const ssD = J.seongsu?.ownDist?.(x, z) ?? Infinity, hgD = J.hangang?.ownDist?.(x, z) ?? Infinity;
   if (J.region?.id === 'starbase') t = 'Starbase';
+  else if (ssD < 60) t = tr('성수동', 'Seongsu-dong');
 else if (cap) t = tr(cap.name, cap.nameEn || cap.name); // [gangnam-night] 같은 섬의 역·랜드마크만
   else if (J.myeongdong?.ready && J.myeongdong.ownDist?.(x, z) < 60) t = tr('명동', 'Myeongdong'); // [myeongdong] 남산 반경 안이라도 명동 땅이면 명동
   else if (Number.isFinite(nd) && nd < 2800) t = tr('남산', 'Namsan');
 
   else if (best && bd < 900) t = tr(`${best.name}역${bd > 250 ? ' 근처' : ''}`, `${best.nameEn || best.name}${bd > 250 ? ' area' : ' Stn.'}`);
-  else t = tr('분당', 'Bundang');
+  else if (hgD < 1) t = tr('한강', 'Hangang');
+  else if (best && bd < 4000) t = tr(`${best.name}역 근처`, `${best.nameEn || best.name} area`);
+  else if (J.region?.id === 'jeongja') t = tr('분당', 'Bundang');
+  else t = tr(String(J.region?.name || '').replace(/\s*\(.*$/, '') || '분당', J.region?.enName || 'Bundang');
   if (t !== plaqueText) { plaqueText = t; plaque.textContent = t; }
 }
 let compAng = null;

@@ -48,6 +48,39 @@ function segDir(px, pz, roads) {
 //   isClear: 다리 상판·보행교·하천 계단·제방 같은 구조물 판정 — 출입구 둘레 CLEAR m 안에 있으면 안 됨 (붙거나 파고들지 않게)
 //   radii: 제자리에서 못 찾으면 옮겨 볼 거리들
 export const CLEAR = 1.5;
+// [seongsu-elevated] 고가역 출입구: 길에서 2층 대합실로 올라가는 계단(왼쪽) + 에스컬레이터(오른쪽), 경사 지붕, 위 연결 통로.
+//   출입구 로컬 좌표는 지하 출입구와 같다 (u 오른쪽, w = 들어가는 방향). 들어가는 칸(w 0.15~1.3)도 같아서 진입 판정은 그대로.
+export const UP = Object.freeze({ N: 30, RISE: 0.18, RUN: 0.3, W0: 0.4, LEN: 11.6, FASCIA_Y: 3.3, TOP: 5.4 });
+function buildUp(top, glow, white) {
+  const { N, RISE, RUN, W0, LEN, TOP } = UP;
+  const STEEL = '#3d434b', ROOF = '#2f353d', CONC = '#b9bab3', GREEN = '#00a84d', STEP = '#a7a59d';
+  const RUNALL = N * RUN, SLOPE = Math.atan2(N * RISE, RUNALL), RL = Math.hypot(RUNALL, N * RISE);
+  // 계단 (왼쪽 절반): 속이 찬 단
+  for (let i = 0; i < N; i++) { const h = (i + 1) * RISE; top.block(-0.78, 0, W0 + (i + 0.5) * RUN, 1.44, h, RUN, i % 2 ? STEP : '#b3b1a9'); top.block(-0.78, h - 0.004, W0 + i * RUN + 0.05, 1.4, 0.012, 0.08, '#e5ad00'); }
+  // 에스컬레이터 (오른쪽 절반): 경사 몸체 + 검은 디딤 + 유리 난간 + 검은 손잡이
+  top.box(0.78, (N * RISE) / 2 - 0.25, W0 + RUNALL / 2, 1.3, 0.5, RL, '#5f646b', { rx: -SLOPE });
+  for (let i = 0; i < N; i += 2) top.block(0.78, (i + 1) * RISE - 0.05, W0 + (i + 0.5) * RUN, 1.05, 0.06, RUN * 0.9, '#2a2d31');
+  for (const u of [0.1, 1.46]) { top.box(u, (N * RISE) / 2 + 0.55, W0 + RUNALL / 2, 0.05, 0.95, RL, '#9fb7c4', { rx: -SLOPE }); top.box(u, (N * RISE) / 2 + 1.05, W0 + RUNALL / 2, 0.1, 0.08, RL, '#16181b', { rx: -SLOPE }); }
+  top.block(0.78, -0.02, W0 / 2, 1.3, 0.04, W0 + 0.2, '#8d9196');            // 아래 승강판
+  // 옆벽 (낮은 콘크리트 + 경사 따라 올라감) · 기둥 · 경사 지붕
+  for (const sx of [-1, 1]) {
+    top.block(sx * 1.66, 0, 0.6, 0.3, 1.1, 1.2, CONC);
+    top.box(sx * 1.66, (N * RISE) / 2 + 0.3, W0 + RUNALL / 2, 0.3, 1.4, RL, CONC, { rx: -SLOPE });
+    for (const w of [0.05, LEN * 0.55, LEN - 0.1]) { const y0 = Math.max(0, Math.min(TOP, (w - W0) * Math.tan(SLOPE))); top.block(sx * 1.72, y0, w, 0.14, 3.2 + (w > LEN - 1 ? 0.4 : 0), 0.14, STEEL); }
+  }
+  top.box(0, 3.15 + (N * RISE) / 2, W0 + RUNALL / 2, 3.9, 0.1, RL + 0.8, ROOF, { rx: -SLOPE });
+  top.box(0, 3.15, -0.2, 3.9, 0.1, 1.2, ROOF);                                   // 입구 위 평지붕 (간판 자리)
+  top.block(0, 2.95, -0.04, W + 0.5, 0.7, 0.12, '#1d2228');                     // 앞 간판 뒤판
+  top.block(-2.25, -0.2, -0.35, 0.56, 3.4, 0.2, '#1d2228');                     // 기둥 간판
+  // 위: 2층 대합실로 이어지는 연결 통로 (바닥 TOP, 유리 띠 + 녹색 띠)
+  top.block(0, TOP - 0.3, LEN - 1.5 + 1.6, 4.0, 0.3, 3.2, CONC);
+  for (const sx of [-1, 1]) top.block(sx * 1.9, TOP, LEN + 0.1, 0.2, 3.2, 3.2, '#d6d8d3');
+  top.block(0, TOP + 3.2, LEN + 0.1, 4.2, 0.35, 3.4, ROOF);
+  top.block(0, TOP + 2.6, LEN + 1.7, 4.2, 0.35, 0.1, GREEN);
+  top.block(0, TOP, LEN + 1.75, 4.0, 2.6, 0.1, '#20262c');                      // 통로 끝 (대합실 안쪽은 어둡게)
+  // 지붕 아래 조명 띠
+  glow.quad(0, 3.05 + (N * RISE) / 2, W0 + RUNALL / 2, 0.3, RL - 0.6, '#fff4dc', { rx: Math.PI / 2 - SLOPE, uv: white });
+}
 export function placeEntrance(exit, { roads, station, isFree, isClear = null, radii = [1.5, 3, 4.5, 6, 8, 10, 12] }) {
   const road = segDir(exit.x, exit.z, roads);
   const base = road ? road.a : 0;
@@ -147,55 +180,58 @@ export function buildEntrances({ scene, overlay, exits, data, world, terrain, th
 
     fm.compose(new THREE.Vector3(e.x, e.y, e.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), e.ry), new THREE.Vector3(1, 1, 1));
     for (const b of [top, pit, mark, glow]) b.frame(fm.clone());
+    if (theme.elevated) { buildUp(top, glow, white); } else {
     // --- 지상 구조 ---
-    const GRANITE = '#9aa0a6', CAP = '#c9ccd0', STEEL = '#3d434b', ROOF = '#2f353d';
-    for (const sx of [-1, 1]) {
-      top.block(sx * 1.66, -0.6, L / 2 + 0.05, 0.3, 1.65, L + 0.5, GRANITE);
-      top.block(sx * 1.66, 1.05, L / 2 + 0.05, 0.4, 0.06, L + 0.6, CAP);
-      top.block(sx * 1.7, 0, 0.05, 0.14, 3.0, 0.14, STEEL);
-      top.block(sx * 1.7, 0, L - 0.1, 0.14, 3.0, 0.14, STEEL);
-      top.box(sx * 0.95, 3.12, L / 2, 2.05, 0.08, L + 0.9, ROOF, { rz: sx * -0.12 });
-      // 난간 (스테인리스)
-      top.box(sx * 1.45, 0.95 - (STEP_N * STEP_RISE) / 2 + 0.2, STEP_W0 + (STEP_N * STEP_RUN) / 2, 0.05, 0.05, Math.hypot(STEP_N * STEP_RUN, STEP_N * STEP_RISE), '#b8bec5', { rx: Math.atan2(STEP_N * STEP_RISE, STEP_N * STEP_RUN) });
+      const GRANITE = '#9aa0a6', CAP = '#c9ccd0', STEEL = '#3d434b', ROOF = '#2f353d';
+      for (const sx of [-1, 1]) {
+        top.block(sx * 1.66, -0.6, L / 2 + 0.05, 0.3, 1.65, L + 0.5, GRANITE);
+        top.block(sx * 1.66, 1.05, L / 2 + 0.05, 0.4, 0.06, L + 0.6, CAP);
+        top.block(sx * 1.7, 0, 0.05, 0.14, 3.0, 0.14, STEEL);
+        top.block(sx * 1.7, 0, L - 0.1, 0.14, 3.0, 0.14, STEEL);
+        top.box(sx * 0.95, 3.12, L / 2, 2.05, 0.08, L + 0.9, ROOF, { rz: sx * -0.12 });
+        // 난간 (스테인리스)
+        top.box(sx * 1.45, 0.95 - (STEP_N * STEP_RISE) / 2 + 0.2, STEP_W0 + (STEP_N * STEP_RUN) / 2, 0.05, 0.05, Math.hypot(STEP_N * STEP_RUN, STEP_N * STEP_RISE), '#b8bec5', { rx: Math.atan2(STEP_N * STEP_RISE, STEP_N * STEP_RUN) });
+      }
+      top.block(0, -0.6, L + 0.1, W + 0.6, 3.65, 0.3, GRANITE);          // 뒷벽
+      top.block(0, 2.45, -0.02, W + 0.5, 0.66, 0.12, '#1d2228');         // 앞 간판 뒤판
+      top.block(-2.25, -0.2, -0.35, 0.56, 3.4, 0.2, '#1d2228');          // 기둥 간판
+      // --- 계단 구덩이 (스텐실 안에서만 보임) ---
+      const DARK = (y0) => (ly) => Math.max(0.25, 1 + (y0 + ly) * 0.16);
+      for (const sx of [-1, 1]) pit.box(sx * (W / 2 + 0.02), -2.1, L / 2, 0.04, 4.2, L + 0.2, '#b9b3a7', { shade: (ly) => Math.max(0.3, 1 + (-2.1 + ly * 4.2) * 0.17) });
+      pit.box(0, -0.6, STEP_W0 / 2, W, 1.2, STEP_W0, '#c8c2b6');
+      // 단: 디딤판(윗면) 밝게 · 챌판(앞면)은 어둡게 + 아래로 갈수록 어두워짐 → 위에서 봐도 '내려가는 계단' 으로 읽힘 (도훈 피드백: 평평한 바닥처럼 보임)
+      const riser = (ly, i) => (Math.floor(i / 4) === 2 ? 1 : 0.42 + 0.3 * (ly + 0.5));
+      for (let i = 0; i < STEP_N; i++) {
+        const yTop = -(i + 1) * STEP_RISE, w0 = STEP_W0 + i * STEP_RUN;
+        const k = Math.max(0.16, 1 - i * 0.048);
+        const c = new THREE.Color('#d6cfc2').multiplyScalar(k);
+        pit.box(0, yTop - 0.3, w0 + STEP_RUN / 2, W, 0.6, STEP_RUN, '#' + c.getHexString(), { shade: riser });
+        pit.box(0, yTop + 0.006, w0 + 0.045, W - 0.1, 0.014, 0.08, '#' + new THREE.Color('#e5ad00').multiplyScalar(Math.max(0.3, k)).getHexString()); // 계단 코 미끄럼 방지 띠
+      }
+      // 구멍 안 난간 (양옆 벽 + 가운데) — 손잡이·기둥. 지상 난간과 이어짐
+      const RUN_ALL = STEP_N * STEP_RUN, DROP_ALL = STEP_N * STEP_RISE, SLOPE = Math.atan2(DROP_ALL, RUN_ALL), RL = Math.hypot(RUN_ALL, DROP_ALL);
+      for (const u of [-(W / 2 - 0.09), 0, W / 2 - 0.09]) {
+        pit.box(u, 0.9 - DROP_ALL / 2 - STEP_RISE / 2, STEP_W0 + RUN_ALL / 2, 0.06, 0.06, RL, '#c3c9cf', { rx: SLOPE });
+        for (let j = 0; j <= 4; j++) { const t = j / 4, w = STEP_W0 + 0.15 + t * (RUN_ALL - 0.3), yb = -STEP_RISE * Math.ceil((w - STEP_W0) / STEP_RUN); pit.box(u, yb + 0.45, w, 0.04, 0.9, 0.04, '#9aa1a8'); }
+      }
+      // 바닥 쪽 깊이감: 아래 3분의 1 을 덮는 어두운 그라데이션 판 (아래로 갈수록 검게)
+      pit.box(0, -DROP_ALL - 0.2, L - 0.9, W, 1.6, 1.8, '#0e1114', { shade: (ly) => 0.4 + 0.6 * (ly + 0.5) });
+      pit.box(0, -2.4, L + 0.02, W, 4.8, 0.04, '#15181c');               // 아래 통로 (어둠)
+      pit.box(0, -0.5, L - 0.02, W, 1.0, 0.04, '#8d877c', { shade: DARK(-0.5) });
+      mark.quad(0, 0.135, L / 2, W, L, '#ffffff', { rx: -Math.PI / 2 }); // 인도 바닥 덧칠(0.08~0.12m)보다 위 — 예전 0.04 는 인도에 가려 구멍 절반만 뚫렸음
     }
-    top.block(0, -0.6, L + 0.1, W + 0.6, 3.65, 0.3, GRANITE);          // 뒷벽
-    top.block(0, 2.45, -0.02, W + 0.5, 0.66, 0.12, '#1d2228');         // 앞 간판 뒤판
-    top.block(-2.25, -0.2, -0.35, 0.56, 3.4, 0.2, '#1d2228');          // 기둥 간판
-    // --- 계단 구덩이 (스텐실 안에서만 보임) ---
-    const DARK = (y0) => (ly) => Math.max(0.25, 1 + (y0 + ly) * 0.16);
-    for (const sx of [-1, 1]) pit.box(sx * (W / 2 + 0.02), -2.1, L / 2, 0.04, 4.2, L + 0.2, '#b9b3a7', { shade: (ly) => Math.max(0.3, 1 + (-2.1 + ly * 4.2) * 0.17) });
-    pit.box(0, -0.6, STEP_W0 / 2, W, 1.2, STEP_W0, '#c8c2b6');
-    // 단: 디딤판(윗면) 밝게 · 챌판(앞면)은 어둡게 + 아래로 갈수록 어두워짐 → 위에서 봐도 '내려가는 계단' 으로 읽힘 (도훈 피드백: 평평한 바닥처럼 보임)
-    const riser = (ly, i) => (Math.floor(i / 4) === 2 ? 1 : 0.42 + 0.3 * (ly + 0.5));
-    for (let i = 0; i < STEP_N; i++) {
-      const yTop = -(i + 1) * STEP_RISE, w0 = STEP_W0 + i * STEP_RUN;
-      const k = Math.max(0.16, 1 - i * 0.048);
-      const c = new THREE.Color('#d6cfc2').multiplyScalar(k);
-      pit.box(0, yTop - 0.3, w0 + STEP_RUN / 2, W, 0.6, STEP_RUN, '#' + c.getHexString(), { shade: riser });
-      pit.box(0, yTop + 0.006, w0 + 0.045, W - 0.1, 0.014, 0.08, '#' + new THREE.Color('#e5ad00').multiplyScalar(Math.max(0.3, k)).getHexString()); // 계단 코 미끄럼 방지 띠
-    }
-    // 구멍 안 난간 (양옆 벽 + 가운데) — 손잡이·기둥. 지상 난간과 이어짐
-    const RUN_ALL = STEP_N * STEP_RUN, DROP_ALL = STEP_N * STEP_RISE, SLOPE = Math.atan2(DROP_ALL, RUN_ALL), RL = Math.hypot(RUN_ALL, DROP_ALL);
-    for (const u of [-(W / 2 - 0.09), 0, W / 2 - 0.09]) {
-      pit.box(u, 0.9 - DROP_ALL / 2 - STEP_RISE / 2, STEP_W0 + RUN_ALL / 2, 0.06, 0.06, RL, '#c3c9cf', { rx: SLOPE });
-      for (let j = 0; j <= 4; j++) { const t = j / 4, w = STEP_W0 + 0.15 + t * (RUN_ALL - 0.3), yb = -STEP_RISE * Math.ceil((w - STEP_W0) / STEP_RUN); pit.box(u, yb + 0.45, w, 0.04, 0.9, 0.04, '#9aa1a8'); }
-    }
-    // 바닥 쪽 깊이감: 아래 3분의 1 을 덮는 어두운 그라데이션 판 (아래로 갈수록 검게)
-    pit.box(0, -DROP_ALL - 0.2, L - 0.9, W, 1.6, 1.8, '#0e1114', { shade: (ly) => 0.4 + 0.6 * (ly + 0.5) });
-    pit.box(0, -2.4, L + 0.02, W, 4.8, 0.04, '#15181c');               // 아래 통로 (어둠)
-    pit.box(0, -0.5, L - 0.02, W, 1.0, 0.04, '#8d877c', { shade: DARK(-0.5) });
-    mark.quad(0, 0.135, L / 2, W, L, '#ffffff', { rx: -Math.PI / 2 }); // 인도 바닥 덧칠(0.08~0.12m)보다 위 — 예전 0.04 는 인도에 가려 구멍 절반만 뚫렸음
     // --- 간판·조명 (아틀라스) ---
     const fascia = fasciaUv.get(ex);
-    glow.quad(0, 2.45, -0.09, W + 0.4, (W + 0.4) * (96 / 504), '#ffffff', { ry: Math.PI, uv: fascia });
-    glow.quad(0, 2.45, 0.05, W + 0.4, (W + 0.4) * (96 / 504), '#ffffff', { uv: fascia });
+    const fy = theme.elevated ? UP.FASCIA_Y : 2.45;
+    glow.quad(0, fy, -0.09, W + 0.4, (W + 0.4) * (96 / 504), '#ffffff', { ry: Math.PI, uv: fascia });
+    glow.quad(0, fy, 0.05, W + 0.4, (W + 0.4) * (96 / 504), '#ffffff', { uv: fascia });
     const pillar = pillarUv.get(ex);
     glow.quad(-2.25, 1.7, -0.46, 0.5, 2.0, '#ffffff', { ry: Math.PI, uv: pillar });
     glow.quad(-2.25, 1.7, -0.24, 0.5, 2.0, '#ffffff', { uv: pillar });
-    glow.quad(0, 3.02, L / 2, 0.35, L - 0.6, '#fff4dc', { rx: Math.PI / 2, uv: white }); // 캐노피 아래 조명
+    if (!theme.elevated) glow.quad(0, 3.02, L / 2, 0.35, L - 0.6, '#fff4dc', { rx: Math.PI / 2, uv: white }); // 캐노피 아래 조명
     if (overlay) {
       const label = ex.ref ? `🚇 ${theme.name}역 ${ex.ref}번 출구` : `🚇 ${theme.name}역 출구`;
-      labels.push(overlay.add({ cls: 'label subway-exit', text: label, getPos: () => new THREE.Vector3(e.x, e.y + 4.2, e.z), maxDist: 70, minDist: 0 }));
+      labels.push(overlay.add({ cls: 'label subway-exit', text: label, getPos: () => new THREE.Vector3(e.x, e.y + (theme.elevated ? 5.0 : 4.2), e.z), maxDist: 70, minDist: 0 }));
     }
   }
   const tex = atlas.texture();
@@ -203,15 +239,17 @@ export function buildEntrances({ scene, overlay, exits, data, world, terrain, th
   const mk = (g, m, order, opts = {}) => { const mesh = new THREE.Mesh(g, m); mesh.renderOrder = order; mesh.name = 'subwayEntrance'; Object.assign(mesh, opts); group.add(mesh); mats.push(m); return mesh; };
   mk(top.build(), new THREE.MeshLambertMaterial({ vertexColors: true }), 0, { castShadow: true, receiveShadow: true });
   mk(glow.build(), new THREE.MeshBasicMaterial({ vertexColors: true, map: tex, toneMapped: false }), 0);
-  const markGeo = mark.build();
-  const S = { stencilWrite: true, stencilRef: 1 };
-  mk(markGeo, new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, ...S, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp }), 1000);
-  mk(markGeo, new THREE.ShaderMaterial({
-    vertexShader: 'void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: 'void main(){ gl_FragDepth = 1.0; gl_FragColor = vec4(0.0); }',
-    colorWrite: false, depthWrite: true, depthTest: true, depthFunc: THREE.AlwaysDepth, ...S, stencilFunc: THREE.EqualStencilFunc,
-  }), 1001);
-  mk(pit.build(), new THREE.MeshLambertMaterial({ vertexColors: true, ...S, stencilFunc: THREE.EqualStencilFunc }), 1002);
+  if (!theme.elevated) {
+    const markGeo = mark.build();
+    const S = { stencilWrite: true, stencilRef: 1 };
+    mk(markGeo, new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, ...S, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp }), 1000);
+    mk(markGeo, new THREE.ShaderMaterial({
+      vertexShader: 'void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'void main(){ gl_FragDepth = 1.0; gl_FragColor = vec4(0.0); }',
+      colorWrite: false, depthWrite: true, depthTest: true, depthFunc: THREE.AlwaysDepth, ...S, stencilFunc: THREE.EqualStencilFunc,
+    }), 1001);
+    mk(pit.build(), new THREE.MeshLambertMaterial({ vertexColors: true, ...S, stencilFunc: THREE.EqualStencilFunc }), 1002);
+  }
   scene.add(group);
 
   // 충돌: 옆벽·뒷벽·기둥 간판 + 계단 깊은 쪽(1.3m 이후)은 막고, 앞 0.15~1.3m 는 들어가는 칸
@@ -219,10 +257,11 @@ export function buildEntrances({ scene, overlay, exits, data, world, terrain, th
     for (const e of list) {
       if (Math.abs(x - e.x) > 9 || Math.abs(z - e.z) > 9) continue;
       const { u, w } = toLocal(e, x, z);
-      if (w > -0.25 - r && w < L + 0.3 + r && Math.abs(u) < 1.85 + r && Math.abs(u) > 1.45 - r) return true;
-      if (w > L - 0.1 - r && w < L + 0.3 + r && Math.abs(u) < 1.9 + r) return true;
+      const LL = theme.elevated ? UP.LEN : L; // [seongsu-elevated] 올라가는 계단은 더 길다
+      if (w > -0.25 - r && w < LL + 0.3 + r && Math.abs(u) < 1.85 + r && Math.abs(u) > 1.45 - r) return true;
+      if (w > LL - 0.1 - r && w < LL + 0.3 + r && Math.abs(u) < 1.9 + r) return true;
       if (Math.abs(u + 2.25) < 0.3 + r && Math.abs(w + 0.35) < 0.12 + r) return true;
-      if (Math.abs(u) < 1.5 && w >= 1.3 && w < L) return true;
+      if (Math.abs(u) < 1.5 && w >= 1.3 && w < LL) return true;
     }
     return false;
   };
@@ -236,7 +275,7 @@ export function buildEntrances({ scene, overlay, exits, data, world, terrain, th
     return best;
   };
   return {
-    group, list, blocks, zoneAt, near, texture: tex,
+    group, list, blocks, zoneAt, near, texture: tex, elevated: !!theme.elevated,
     dispose() { scene.remove(group); group.traverse((o) => o.geometry?.dispose()); for (const m of mats) m.dispose(); tex.dispose(); for (const it of labels) overlay?.remove(it); labels.length = 0; },
   };
 }
