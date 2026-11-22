@@ -11,8 +11,8 @@ import { unpackTributeDots, TRIBUTE_DOT_COUNT } from './chooTributeDots.js';
 export const TRIBUTE_ENABLED = true;
 export const TRIBUTE_UNTIL_MS = Date.parse('2026-11-30T23:59:59+09:00');
 
-const DIST = 500;     // 카메라 전방 수평 거리(m)
-const HEIGHT = 155;   // 카메라보다 위로(m) ≈ 17°
+const DIST = 420;     // 카메라 전방 수평 거리(m)
+const HEIGHT = 420;   // 카메라보다 위로(m) ≈ 41°, 고층 빌딩 위 하늘
 const BOB = 3.6;
 const FW_N = 180;
 const FW_LIFE = 2.4;
@@ -45,9 +45,10 @@ function glowTexture() {
   cv.width = cv.height = 64;
   const x = cv.getContext('2d');
   const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
-  g.addColorStop(0, 'rgba(255,255,240,1)');
-  g.addColorStop(0.18, 'rgba(255,220,140,0.85)');
-  g.addColorStop(0.45, 'rgba(255,170,70,0.28)');
+  g.addColorStop(0, 'rgba(255,255,245,1)');
+  g.addColorStop(0.16, 'rgba(255,230,160,0.9)');
+  g.addColorStop(0.4, 'rgba(255,180,80,0.22)');
+  g.addColorStop(0.7, 'rgba(255,150,50,0.05)');
   g.addColorStop(1, 'rgba(255,120,30,0)');
   x.fillStyle = g;
   x.fillRect(0, 0, 64, 64);
@@ -86,7 +87,7 @@ const FS = /* glsl */ `
     vec4 s = texture2D(uGlow, gl_PointCoord);
     float g = s.a * s.r;
     if (g < 0.01 || vA < 0.01) discard;
-    gl_FragColor = vec4(vC * (g * vA * 1.35), 1.0);
+    gl_FragColor = vec4(vC * (g * vA * 1.15), 1.0);
   }
 `;
 
@@ -136,7 +137,7 @@ function makeFormation(tex) {
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   geo.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
   geo.setAttribute('aAlpha', new THREE.BufferAttribute(alpha, 1));
-  const mat = makeMat(tex, 11);
+  const mat = makeMat(tex, 6.5);
   const pts = new THREE.Points(geo, mat);
   pts.name = 'choo-tribute-drones';
   pts.frustumCulled = false;
@@ -245,18 +246,24 @@ export function createChooTribute({ scene }) {
   let nextBurst = 40 + Math.random() * 20; // 첫 불꽃은 40~60초 뒤, 스크린샷은 글자가 먼저
   let allowed = tributeWanted();
 
+  let ticks = 0;
   function place(camera, dt) {
+    ticks++;
+    camera.updateMatrixWorld?.();
     camera.getWorldDirection(fwd);
     fwd.y = 0;
-    if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, 1);
-    fwd.normalize();
-    if (!inited) { smooth.copy(fwd); inited = true; }
+    if (fwd.lengthSq() < 1e-8) fwd.set(0, 0, -1);
+    else fwd.normalize();
+    // 크게 돌아서면 바로 따라가고, 조금만 돌면 부드럽게 (하늘 글자가 카메라 뒤로 남는 일 방지)
+    const ang = inited ? smooth.angleTo(fwd) : 10;
+    if (!inited || ang > 0.4) smooth.copy(fwd);
     else {
-      const k = 1 - Math.exp(-dt * 1.25);
+      const k = 1 - Math.exp(-Math.max(dt, 0) * 2.8);
       smooth.lerp(fwd, k);
-      if (smooth.lengthSq() < 1e-6) smooth.copy(fwd);
+      if (smooth.lengthSq() < 1e-8) smooth.copy(fwd);
       else smooth.normalize();
     }
+    inited = true;
     const bob = Math.sin(time * 0.62) * BOB;
     group.position.set(
       camera.position.x + smooth.x * DIST,
@@ -314,6 +321,8 @@ export function createChooTribute({ scene }) {
       draws: group.visible ? (fw.pts.visible ? 2 : 1) : 0,
       until: TRIBUTE_UNTIL_MS,
       pos: group.position.toArray(),
+      fwd: smooth.toArray(),
+      ticks,
     };
   }
 
