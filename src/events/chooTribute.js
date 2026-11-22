@@ -114,24 +114,20 @@ function makeMat(tex, size) {
 }
 
 function makeFormation(tex) {
-  const { x, y, kind, n } = unpackTributeDots();
+  const { x, y, r, g, b, n } = unpackTributeDots();
   const pos = new Float32Array(n * 3);
   const col = new Float32Array(n * 3);
   const phase = new Float32Array(n);
   const alpha = new Float32Array(n);
-  const TEXT = [1.0, 0.95, 0.82];
-  const GLOVE = [1.0, 0.20, 0.10];
-  const CUFF = [1.0, 1.0, 0.96];
-  const SEAM = [0.72, 0.06, 0.03];
   for (let i = 0; i < n; i++) {
     pos[i * 3] = x[i];
     pos[i * 3 + 1] = y[i];
     pos[i * 3 + 2] = (hash01(i, 3) - 0.5) * 1.6;
-    const c = kind[i] === 2 ? CUFF : kind[i] === 3 ? SEAM : kind[i] === 1 ? GLOVE : TEXT;
+    // 글자·글러브 색은 베이크된 RGB (글러브는 Twemoji 팔레트)
     const jig = 0.94 + hash01(i, 9) * 0.10;
-    col[i * 3] = c[0] * jig;
-    col[i * 3 + 1] = c[1] * jig;
-    col[i * 3 + 2] = c[2] * jig;
+    col[i * 3] = r[i] * jig;
+    col[i * 3 + 1] = g[i] * jig;
+    col[i * 3 + 2] = b[i] * jig;
     phase[i] = hash01(i, 1) * Math.PI * 2;
     alpha[i] = 1;
   }
