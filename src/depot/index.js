@@ -92,6 +92,7 @@ body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할
     if (!fade.phase) return;
     fade.t += dt;
     // [depot-leave] 안전장치: 나가는 중(페이드 아웃 뒤 매장 정리)이 12초를 넘으면 강제로 마무리해 게임이 까만 화면/매장 프레임에 갇히지 않게 한다
+    //   (이 함수는 game.js frame() 고리 안에서만 돈다 — frame() 이 throw 해도 고리가 이어지게 game.js 에서 감쌌다)
     if (fade.leaving && fade.phase === 'out' && fade.t > FADE + 12) {
       console.warn('[depot] leave watchdog: forcing exit');
       try { onInterior?.('', null); } catch { /* */ }
@@ -99,6 +100,7 @@ body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할
       interior = null; active = false; leavingWait = false; document.body.classList.remove('depot-inside');
       try { onPark?.(false); } catch { /* */ }
       try { audio?.leave(); } catch { /* */ }
+      try { const p = getPlayer?.()?.position; if (p) { p.x = DEPOT_SPAWN.x; p.z = DEPOT_SPAWN.z; } } catch { /* */ } // finishLeave 와 같이 문 앞에 세움
       paEl.hidden = true; fade = { t: -0.1, phase: 'in', leaving: false };
       return;
     }

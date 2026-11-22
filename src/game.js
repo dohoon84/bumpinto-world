@@ -2847,7 +2847,18 @@ function syncViewSize() {
   if (_viewSize.x !== w || _viewSize.y !== h) renderer.setSize(w, h);
   if (camera.aspect !== w / h) { camera.aspect = w / h; camera.updateProjectionMatrix(); }
 }
+// [depot-leave] frame() 은 맨 끝에서 다음 requestAnimationFrame(frame) 을 건다. 그래서 중간에 한 번이라도 throw 하면
+//   고리가 영영 끊겨 화면은 마지막 그림(예: 범창고 안)에 멈추고, DOM·키 입력만 산다 — 매장 나가기 페이드·워치독도 이 고리 안이라 같이 멈춘다.
+//   한 프레임이 던져도 다음 프레임은 꼭 걸고, 에러는 처음 3번 + 600번마다 콘솔에 남긴다.
+let frameErrs = 0;
 function frame() {
+  try { frameBody(); } catch (e) {
+    frameErrs++;
+    if (frameErrs <= 3 || frameErrs % 600 === 0) console.error(`[frame] 프레임 예외 (${frameErrs}회) — 루프는 계속`, e);
+    requestAnimationFrame(frame);
+  }
+}
+function frameBody() {
   lastFrameAt = performance.now();
   if (glContextLost) { requestAnimationFrame(frame); return; }
   syncViewSize();
