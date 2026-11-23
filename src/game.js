@@ -3180,7 +3180,7 @@ function frameBody() {
   else if (corridor?.namsan?.cable?.applyRideCamera?.(camera, dt, player, cam)) sun.target.position.copy(P);
   else if (cam.mode === 'follow') {
     // 남산 일대는 도심 야경이 수 km 까지 보여야 해서 안개를 멀리 민다.
-    if (corridor?.namsan?.tower && Math.hypot(P.x - corridor.namsan.tower.ox, P.z - corridor.namsan.tower.oz) < 8000) {
+    if (corridor?.namsan?.tower && corridor.namsan.root?.visible !== false && Math.hypot(P.x - corridor.namsan.tower.ox, P.z - corridor.namsan.tower.oz) < 8000) { // [seongsu-mobile] 잠든(폰 3.2 km 밖) 남산은 안개를 밀지 않는다
       scene.fog.near = 650; scene.fog.far = 10500;
     }
     const hgFog = corridor?.hangang; // [hangang-isolation] 한강 땅(다른 섬 제외) 200 m 안에서만

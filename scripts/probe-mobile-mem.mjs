@@ -43,7 +43,7 @@ const t0 = Date.now();
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 const built = [];
 page.on('console', (m) => { const t = m.text(); if (m.type() === 'error') errors.push(t.slice(0, 200)); if (/lazy-built|built in/.test(t)) built.push(`${Math.round((Date.now() - t0) / 1000)}s ${t.slice(0, 90)}`); });
-let peakHeap = 0; const samples = [];
+let peakHeap = 0, journeyPre = null; const samples = [];
 const sample = async (tag) => { try { const { metrics } = await cdp.send('Performance.getMetrics'); const h = metrics.find((m) => m.name === 'JSHeapUsedSize').value; peakHeap = Math.max(peakHeap, h); const g = await page.evaluate(() => window.__glL?.now?.() || null).catch(() => null); samples.push({ t: Date.now() - t0, tag, heap: Math.round(h / 1048576), tex: g ? Math.round(g.tex / 1048576) : null, buf: g ? Math.round(g.buf / 1048576) : null }); } catch { /* */ } };
 const iv = setInterval(() => sample('poll'), 700);
 const q = `ws=mock&enter=1&at=${AT}&hour=${process.env.HOUR || 15}&weather=clear&noticePopup=0&controlscard=0&bgm=0&subwayVoice=0&subwayRt=0${EXTRA ? '&' + EXTRA : ''}`;
@@ -55,6 +55,12 @@ const settle = +(process.env.SETTLE || 40000);
 if (process.env.CHURN) { setTimeout(async () => { await cdp.send('HeapProfiler.enable'); await cdp.send('HeapProfiler.startSampling', { samplingInterval: 32768, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true }); }, settle - 15000); }
 const tEnd = Date.now() + settle;
 while (Date.now() < tEnd) { await page.waitForTimeout(2000); }
+if (process.env.JOURNEY) { // [journey] 먼저 AT 에서 놀다가 성수로 (지하철·순간이동처럼 preload → teleport)
+  const pre = await page.evaluate(() => window.__glL.now());
+  journeyPre = { tex: +(pre.tex / 1048576).toFixed(1), buf: +(pre.buf / 1048576).toFixed(1) };
+  await page.evaluate(async (g) => { const J = window.__jj, s = g ? { x: g[0], z: g[1] } : { x: -4377.3, z: -18946.7 }; await J.corridor.preload(s.x, s.z); J.teleport(s.x, s.z); }, process.env.GOTO ? process.env.GOTO.split(',').map(Number) : null);
+  const t2 = Date.now() + 40000; while (Date.now() < t2) await page.waitForTimeout(2000);
+}
 clearInterval(iv);
 await sample('end');
 await cdp.send('HeapProfiler.collectGarbage');
@@ -63,9 +69,9 @@ const liveHeap = Math.round((await cdp.send('Performance.getMetrics')).metrics.f
 const fin = await page.evaluate(async () => {
   const J = window.__jj, R = J.renderer; await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
   const L = window.__glL; const n = L.now();
-  return { draws: R.info.render.calls, tris: R.info.render.triangles, geos: R.info.memory.geometries, textures: R.info.memory.textures, glTexMB: +(n.tex / 1048576).toFixed(1), glBufMB: +(n.buf / 1048576).toFixed(1), peakTexMB: +(L.peakTex / 1048576).toFixed(1), peakBufMB: +(L.peakBuf / 1048576).toFixed(1), lost: L.lost, pr: R.getPixelRatio(), db: [R.getContext().drawingBufferWidth, R.getContext().drawingBufferHeight], pos: [Math.round(J.player.position.x), Math.round(J.player.position.z)], mobileBody: document.body.className.slice(0, 120), ssReady: !!J.seongsu?.ready, ready: { namsan: !!J.namsan?.ready, hangang: !!J.hangang?.ready, myeongdong: !!J.myeongdong?.ready, seongsu: !!J.seongsu?.ready } };
+  return { draws: R.info.render.calls, tris: R.info.render.triangles, geos: R.info.memory.geometries, textures: R.info.memory.textures, glTexMB: +(n.tex / 1048576).toFixed(1), glBufMB: +(n.buf / 1048576).toFixed(1), peakTexMB: +(L.peakTex / 1048576).toFixed(1), peakBufMB: +(L.peakBuf / 1048576).toFixed(1), lost: L.lost, pr: R.getPixelRatio(), db: [R.getContext().drawingBufferWidth, R.getContext().drawingBufferHeight], pos: [Math.round(J.player.position.x), Math.round(J.player.position.z)], mobileBody: document.body.className.slice(0, 120), ssReady: !!J.seongsu?.ready, fogFar: Math.round(J.player.parent ? (() => { let sc = J.player; while (sc.parent) sc = sc.parent; return sc.fog?.far || 0; })() : 0), ready: { namsan: !!J.namsan?.ready, hangang: !!J.hangang?.ready, myeongdong: !!J.myeongdong?.ready, seongsu: !!J.seongsu?.ready } };
 });
-const out = { at: AT, extra: EXTRA, peakHeapMB: Math.round(peakHeap / 1048576), liveHeapMB: liveHeap, canvas: canvasLive, ...fin, errors: errors.slice(0, 8), built, timeline: process.env.TL ? samples : undefined };
+const out = { at: AT, extra: EXTRA, peakHeapMB: Math.round(peakHeap / 1048576), liveHeapMB: liveHeap, canvas: canvasLive, ...fin, journeyPre, errors: errors.slice(0, 8), built, timeline: process.env.TL ? samples : undefined };
 if (process.env.PROF || process.env.CHURN) {
   const { profile } = await cdp.send('HeapProfiler.stopSampling');
   const byFn = new Map(), bySrc = new Map();

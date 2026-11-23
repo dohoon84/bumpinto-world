@@ -1,6 +1,8 @@
 // [namsan] [hangang] 부트 때는 가벼운 스텁만 두고, 가까이 오면 메시를 만든다.
 import { NAMSAN_BOUNDS, HANGANG_BOXES, NAMSAN_SPAWN, HANGANG_SPAWN, HANGANG_HAP_SPAWNS, emptyLandmarkMini } from './landmarkBounds.js';
 import { MYEONGDONG_BOUNDS, MYEONGDONG_BOXES, MYEONGDONG_SPAWN } from './myeongdongFlags.js'; // [myeongdong]
+import { evictGpu } from '../../evictGpu.js'; // [seongsu-mobile]
+import { isMobileMode } from '../../mobile/flag.js'; // [seongsu-mobile]
 
 export function landmarkLazyEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   const s = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
@@ -40,15 +42,32 @@ export function landmarkDormEnabled(search = typeof location !== 'undefined' ? l
   return s.get('landmarkdorm') !== '0';
 }
 /** root 를 d(경계까지 거리)에 따라 켜고 끈다. 꺼진 동안은 matrixWorld 갱신도 건너뛴다. 반환: 켜져 있나 */
-export function syncLandmarkDormant(root, d, { out = LANDMARK_DORMANT_M, wake = LANDMARK_WAKE_M } = {}) {
+/** [seongsu-mobile] 폰은 미리 짓기(2.6 km)에 맞춰 3.2 km 밖이면 잠들고 2.8 km 안에서 깬다 (안개 1.8 km 밖이라 화면은 같다) */
+export const LANDMARK_DORMANT_MOBILE_M = 3200;
+export const LANDMARK_WAKE_MOBILE_M = 2800;
+export function syncLandmarkDormant(root, d, opts = {}) {
   if (!root) return false;
+  const mob = dormantEvictOn();
+  const out = opts.out ?? (mob ? LANDMARK_DORMANT_MOBILE_M : LANDMARK_DORMANT_M);
+  const wake = opts.wake ?? (mob ? LANDMARK_WAKE_MOBILE_M : LANDMARK_WAKE_M);
   const on = root.visible ? d <= out : d < wake;
   if (on !== root.visible) {
     root.visible = on;
     root.matrixWorldAutoUpdate = on;
     if (on) root.updateMatrixWorld(true);
+    else if (mob) evictGpu(root); // [seongsu-mobile] 폰: 3.2 km 밖으로 잠든 랜드마크는 GPU 사본을 내린다 (다시 오면 그릴 때 다시 올림)
   }
   return on;
+}
+let dormEvict = null;
+/** [seongsu-mobile] 폰에서만 (?lmevict=0 이면 끔). 명동 → 지하철 → 성수처럼 멀리 옮겨 가도 남산·명동 텍스처·버퍼가 GPU 에 남지 않게 */
+export function dormantEvictOn() {
+  if (dormEvict != null) return dormEvict;
+  try {
+    const q = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
+    dormEvict = q.get('lmevict') === '0' ? false : q.get('lmevict') === '1' ? true : isMobileMode();
+  } catch { dormEvict = false; }
+  return dormEvict;
 }
 
 /** 한 조각 JS 예산. 200ms 목표에서 GPU를 빼고도 여유. */
