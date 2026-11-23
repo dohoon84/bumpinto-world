@@ -46,7 +46,7 @@ import { hollowSeohyeonArcade } from '../arcade/locations.js'; // [arcade] 서�
 import { migeumWaterEnabled, MIGEUM_WATER_FILE, migeumChRoads, mergeMigeumWater, applyMigeumBank } from './migeumWater.js'; // [migeum-water]
 import { cityhallEnabled, CITYHALL_FILE, filterCityHallHidden, createCityHall } from './cityhall.js'; // [cityhall]
 import { namsanEnabled, namsanCableEnabled, NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, NAMSAN_CITY_FILE } from './landmarks/namsanFlags.js'; // [namsan]
-import { landmarkLazyEnabled, LANDMARK_NEAR_M, LANDMARK_PREFETCH_M, makeNamsanMeta, makeHangangMeta, makeMyeongdongMeta, wrapLandmark, yieldPaint, makeBuildYield, makeSlicer, beginLandmarkBuild, landmarkBuildGate, LANDMARK_URGENT_SLICE_MS } from './landmarks/lazyLandmarks.js'; // [namsan] [hangang] 메시 지연 생성
+import { landmarkLazyEnabled, LANDMARK_NEAR_M, landmarkPrefetchM, makeNamsanMeta, makeHangangMeta, makeMyeongdongMeta, wrapLandmark, yieldPaint, makeBuildYield, makeSlicer, beginLandmarkBuild, landmarkBuildGate, LANDMARK_URGENT_SLICE_MS } from './landmarks/lazyLandmarks.js'; // [namsan] [hangang] 메시 지연 생성
 import { createNamsanNpc, namsanNpcEnabled } from './landmarks/namsanNpc.js'; // [namsan-npc]
 import { myeongdongEnabled, MYEONGDONG_FILE } from './landmarks/myeongdongFlags.js'; // [myeongdong]
 import { seongsuEnabled, SEONGSU_FILE, SEONGSU_BOUNDS, SEONGSU_SPAWN, SEONGSU_LINK } from './landmarks/seongsuFlags.js'; // [seongsu]
@@ -626,6 +626,8 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     return hangangBuilding;
   }
 
+  let lmPrefetchV = null; // [seongsu-mobile] 폰·PC 미리 짓기 거리 (처음 부를 때 한 번 정한다)
+  const lmPrefetch = () => lmPrefetchV || (lmPrefetchV = landmarkPrefetchM(mobileHere(), params || (typeof location !== 'undefined' ? location.search : '')));
   function landmarkNeeded(stub, x, z, lookX, lookZ, radius = LANDMARK_NEAR_M) {
     if (!stub || stub.ready) return false;
     const boxes = stub.boxes || (stub.bounds ? [stub.bounds] : []);
@@ -649,7 +651,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
   async function ensureLandmarks(x, z, opts = {}) {
     if (!Number.isFinite(x) || !Number.isFinite(z)) return;
     const urgent = !!opts.urgent;
-    const radius = urgent ? LANDMARK_NEAR_M : LANDMARK_PREFETCH_M;
+    const radius = urgent ? LANDMARK_NEAR_M : lmPrefetch().radius; // [seongsu-mobile] 폰은 2.6 km
     const wait = !urgent || !onIsland(x, z); // 섬 위 급한 도착은 기다리지 않는다
     const jobs = [];
     const hurry = urgent && wait; // 기다리지 않는 섬 위 도착은 평소 조각(8ms)으로 뒤에서 짓는다
@@ -864,7 +866,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
         let lx, lz;
         if (rx != null) {
           const vx = x - rx, vz = z - rz, spd = Math.hypot(vx, vz);
-          if (spd > 0.4) { lx = x + (vx / spd) * 2500; lz = z + (vz / spd) * 2500; }
+          if (spd > 0.4) { const L = lmPrefetch().look; lx = x + (vx / spd) * L; lz = z + (vz / spd) * L; } // [seongsu-mobile] 폰 0.6 km
         }
         void ensureLandmarks(x, z, { lookX: lx, lookZ: lz });
       }
