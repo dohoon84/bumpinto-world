@@ -1,6 +1,8 @@
 // [namsan] [hangang] 부트 때는 가벼운 스텁만 두고, 가까이 오면 메시를 만든다.
 import { NAMSAN_BOUNDS, HANGANG_BOXES, NAMSAN_SPAWN, HANGANG_SPAWN, HANGANG_HAP_SPAWNS, emptyLandmarkMini } from './landmarkBounds.js';
 import { MYEONGDONG_BOUNDS, MYEONGDONG_BOXES, MYEONGDONG_SPAWN } from './myeongdongFlags.js'; // [myeongdong]
+import { evictGpu } from '../../evictGpu.js'; // [seongsu-mobile]
+import { isMobileMode } from '../../mobile/flag.js'; // [seongsu-mobile]
 
 export function landmarkLazyEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   const s = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
@@ -11,6 +13,22 @@ export function landmarkLazyEnabled(search = typeof location !== 'undefined' ? l
 export const LANDMARK_NEAR_M = 1800;
 /** 접근 중 미리 짓기(안개보다 훨씬 앞). 자전거 8.6 m/s × 여유 시간. */
 export const LANDMARK_PREFETCH_M = 8000;
+/**
+ * [seongsu-mobile] 폰은 미리 짓기를 안개(1.8 km) 조금 바깥까지만. 8 km 그대로면 성수에 내리자마자 5.6 km 떨어진 남산·6.6 km 명동까지
+ *   뒤에서 지어 JS 힙이 465 MB(정자 248 MB)까지 올라 iPhone 탭이 메모리 부족으로 죽고 새로고침(→ 처음 화면)됐다.
+ *   안 보이고 금방 갈 수도 없는 곳이라 지금은 짓지 않고, 2.6 km 안으로 다가올 때(자전거로도 1분 넘게 남음) 짓는다.
+ */
+export const LANDMARK_PREFETCH_MOBILE_M = 2600;
+/** 진행 방향으로 이만큼 앞 점도 미리 짓기 판정에 쓴다 (PC 2.5 km · 폰 0.6 km) */
+export const LANDMARK_LOOK_M = 2500;
+export const LANDMARK_LOOK_MOBILE_M = 600;
+/** ?lmprefetch=8000 처럼 미리 짓기 거리를 강제 (비교·측정용) */
+export function landmarkPrefetchM(mobile, search = typeof location !== 'undefined' ? location.search : '') {
+  const s = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
+  const f = +s.get('lmprefetch');
+  if (f > 0) return { radius: f, look: f >= LANDMARK_PREFETCH_M ? LANDMARK_LOOK_M : LANDMARK_LOOK_MOBILE_M };
+  return mobile ? { radius: LANDMARK_PREFETCH_MOBILE_M, look: LANDMARK_LOOK_MOBILE_M } : { radius: LANDMARK_PREFETCH_M, look: LANDMARK_LOOK_M };
+}
 /**
  * [station-loop] 한 번 지은 남산·한강을 멀리(경계에서 8 km 밖 = 처음 짓기 시작하는 거리) 떠나면 통째로 렌더·행렬 갱신에서 뺀다.
  *   예전엔 한강(1.5만 메시)·남산이 한 번 지어지면 정자에 돌아와도 계속 그려져 draw call 이 5배, 프레임 JS 가 4배가 됐다.
@@ -24,15 +42,32 @@ export function landmarkDormEnabled(search = typeof location !== 'undefined' ? l
   return s.get('landmarkdorm') !== '0';
 }
 /** root 를 d(경계까지 거리)에 따라 켜고 끈다. 꺼진 동안은 matrixWorld 갱신도 건너뛴다. 반환: 켜져 있나 */
-export function syncLandmarkDormant(root, d, { out = LANDMARK_DORMANT_M, wake = LANDMARK_WAKE_M } = {}) {
+/** [seongsu-mobile] 폰은 미리 짓기(2.6 km)에 맞춰 3.2 km 밖이면 잠들고 2.8 km 안에서 깬다 (안개 1.8 km 밖이라 화면은 같다) */
+export const LANDMARK_DORMANT_MOBILE_M = 3200;
+export const LANDMARK_WAKE_MOBILE_M = 2800;
+export function syncLandmarkDormant(root, d, opts = {}) {
   if (!root) return false;
+  const mob = dormantEvictOn();
+  const out = opts.out ?? (mob ? LANDMARK_DORMANT_MOBILE_M : LANDMARK_DORMANT_M);
+  const wake = opts.wake ?? (mob ? LANDMARK_WAKE_MOBILE_M : LANDMARK_WAKE_M);
   const on = root.visible ? d <= out : d < wake;
   if (on !== root.visible) {
     root.visible = on;
     root.matrixWorldAutoUpdate = on;
     if (on) root.updateMatrixWorld(true);
+    else if (mob) evictGpu(root); // [seongsu-mobile] 폰: 3.2 km 밖으로 잠든 랜드마크는 GPU 사본을 내린다 (다시 오면 그릴 때 다시 올림)
   }
   return on;
+}
+let dormEvict = null;
+/** [seongsu-mobile] 폰에서만 (?lmevict=0 이면 끔). 명동 → 지하철 → 성수처럼 멀리 옮겨 가도 남산·명동 텍스처·버퍼가 GPU 에 남지 않게 */
+export function dormantEvictOn() {
+  if (dormEvict != null) return dormEvict;
+  try {
+    const q = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
+    dormEvict = q.get('lmevict') === '0' ? false : q.get('lmevict') === '1' ? true : isMobileMode();
+  } catch { dormEvict = false; }
+  return dormEvict;
 }
 
 /** 한 조각 JS 예산. 200ms 목표에서 GPU를 빼고도 여유. */

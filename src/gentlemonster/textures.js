@@ -2,7 +2,16 @@
 import * as THREE from 'three';
 import { mulberry } from './geo.js';
 
-function cv(w, h = w) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
+// [seongsu-mobile] 폰은 긴 변 512 이상 캔버스를 반으로 (그리는 좌표는 그대로, ctx.scale). 캔버스 화상 35 MB → 약 14 MB (원래 크기를 유지하는 글자 라벨 포함).
+//   PC 는 1 (그대로). 글자 라벨·putImageData 로 그리는 무늬는 fixed 로 원래 크기.
+let TEX_S = 1;
+export function setTexScale(s = 1) { TEX_S = s > 0 && s <= 1 ? s : 1; }
+function cv(w, h = w, fixed = false) {
+  const s = !fixed && TEX_S < 1 && Math.max(w, h) >= 512 ? TEX_S : 1;
+  const c = document.createElement('canvas'); c.width = Math.round(w * s); c.height = Math.round(h * s);
+  const g = c.getContext('2d'); if (s !== 1) g.scale(s, s);
+  return [c, g];
+}
 function tex(c, { rep = true, aniso = 4, srgb = true } = {}) {
   const t = new THREE.CanvasTexture(c);
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
@@ -178,7 +187,7 @@ export function curtainTex({ night = false } = {}) {
 }
 /** 안내판/사인 텍스트 (흰 글씨, 투명 배경이 아닌 지정 배경) */
 export function labelTex(text, { w = 512, h = 128, bg = '#16161a', fg = '#f2f0ea', font = '700 56px system-ui, sans-serif', sub = '', subFont = '500 26px system-ui, sans-serif', align = 'center' } = {}) {
-  const [c, g] = cv(w, h);
+  const [c, g] = cv(w, h, true);
   if (bg) { g.fillStyle = bg; g.fillRect(0, 0, w, h); } else g.clearRect(0, 0, w, h);
   g.fillStyle = fg; g.textBaseline = 'middle'; g.textAlign = align;
   const x = align === 'center' ? w / 2 : align === 'left' ? 24 : w - 24;
@@ -234,7 +243,7 @@ export function skinTex() {
 }
 /** 세로 리브 띠 (8 홈 / 반복) — color + normal */
 export function ribTex({ normal = false } = {}) {
-  const W = 256, H = 64; const [c, g] = cv(W, H); const r = mulberry(181);
+  const W = 256, H = 64; const [c, g] = cv(W, H, true); const r = mulberry(181);
   const img = g.createImageData(W, H);
   for (let x = 0; x < W; x++) {
     const f = (x % 32) / 32; // 0..1 한 홈
