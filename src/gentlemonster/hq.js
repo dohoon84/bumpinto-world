@@ -12,6 +12,7 @@ import { buildShell, pointInPoly, LEVEL_NAME } from './shell.js';
 import { createWorldPhysics } from './walker.js';
 import { buildInterior } from './interior.js';
 import { loadSculpts } from './sculptLoader.js';
+import { setTexScale } from './textures.js'; // [seongsu-mobile]
 import { PLAN as P } from './plan.js';
 
 export { LEVEL_NAME };
@@ -40,6 +41,7 @@ export function floorOfY(y) { return y > FY[5] - 0.6 ? 5 : y > FY[4] - 0.6 ? 4 :
  * @param {boolean} [o.core]  true = 정원·담·사인·에어돔만 (주변 길·블록은 리전이 그린다)
  */
 export function createHQ({ mobile = false, maxAniso = 4, core = true } = {}) {
+  setTexScale(mobile ? 0.5 : 1); // [seongsu-mobile] 폰은 큰 무늬 캔버스 반 크기
   const mats = createMaterials({ maxAniso });
   const imats = createInteriorMaterials({ maxAniso });
   const env = roomEnvTex();
