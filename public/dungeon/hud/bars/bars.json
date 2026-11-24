@@ -1,0 +1,38 @@
+{
+ "slice_lr": 8,
+ "ghost": {
+  "color": "#FFECAA",
+  "delay_s": 0.4,
+  "shrink_s": 0.3
+ },
+ "bars": {
+  "hp": {
+   "fill": "#B0282E",
+   "track": "#33151C"
+  },
+  "rage": {
+   "fill": "#FF7A1A",
+   "track": "#442718"
+  },
+  "mana": {
+   "fill": "#8C7FFF",
+   "track": "#2B284A"
+  },
+  "holy": {
+   "fill": "#FFC845",
+   "track": "#443821"
+  },
+  "focus": {
+   "fill": "#3DDC84",
+   "track": "#193C2F"
+  },
+  "energy": {
+   "fill": "#FF5C9A",
+   "track": "#442034"
+  },
+  "boss_cast": {
+   "fill": "#FF8C28",
+   "track": "#442B1B"
+  }
+ }
+}

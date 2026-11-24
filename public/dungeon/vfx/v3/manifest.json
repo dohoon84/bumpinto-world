@@ -1,0 +1,595 @@
+{
+  "trails/comet_trail_mage.png": {
+    "size": [
+      1024,
+      256
+    ],
+    "tint": "baked"
+  },
+  "particles/comet_head_mage.png": {
+    "size": [
+      512,
+      512
+    ],
+    "tint": "baked"
+  },
+  "particles/fire_burst_mage.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "baked"
+  },
+  "contrast/burst_mage_dark.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "baked"
+  },
+  "trails/beam_noise.png": {
+    "size": [
+      256,
+      256
+    ],
+    "wrap": "repeat",
+    "tint": "none"
+  },
+  "magic/heat_haze_normal.png": {
+    "size": [
+      256,
+      256
+    ],
+    "wrap": "repeat",
+    "tint": "none"
+  },
+  "decals/heat_breath_mask.png": {
+    "size": [
+      512,
+      512
+    ],
+    "wrap": "clamp",
+    "tint": "none"
+  },
+  "slashes/spin_blade_ring.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "multiply",
+    "uses": [
+      "spin"
+    ]
+  },
+  "slashes/crescent_bold.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "multiply",
+    "uses": [
+      "combo",
+      "spin"
+    ]
+  },
+  "slashes/crescent_bold_thin.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "particles/fire_burst.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "baked",
+    "uses": [
+      "fireball"
+    ]
+  },
+  "particles/smoke_ring.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "baked"
+  },
+  "particles/comet_head.png": {
+    "size": [
+      512,
+      512
+    ],
+    "tint": "baked"
+  },
+  "trails/comet_trail.png": {
+    "size": [
+      1024,
+      256
+    ],
+    "tint": "baked"
+  },
+  "rings/shockwave_ring.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "decals/ground_crack.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "particles/debris_chunk.png": {
+    "size": [
+      256,
+      256
+    ],
+    "tint": "baked"
+  },
+  "trails/lightning_thick.png": {
+    "size": [
+      512,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "trails/lightning_branch.png": {
+    "size": [
+      512,
+      768
+    ],
+    "tint": "multiply"
+  },
+  "particles/ground_splash.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "magic/heal_pillar.png": {
+    "size": [
+      256,
+      1024
+    ],
+    "tint": "baked"
+  },
+  "particles/rising_rune.png": {
+    "size": [
+      256,
+      256
+    ],
+    "tint": "baked"
+  },
+  "magic/shield_hex.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "baked"
+  },
+  "magic/shield_bubble.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "baked"
+  },
+  "rings/halo.png": {
+    "size": [
+      512,
+      512
+    ],
+    "tint": "baked"
+  },
+  "rings/halo_shockwave.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "baked"
+  },
+  "trails/arrow_streak_bold.png": {
+    "size": [
+      256,
+      1024
+    ],
+    "tint": "baked"
+  },
+  "trails/rain_streak.png": {
+    "size": [
+      128,
+      512
+    ],
+    "tint": "baked"
+  },
+  "particles/impact_puff.png": {
+    "size": [
+      256,
+      256
+    ],
+    "tint": "baked"
+  },
+  "trails/dash_trail.png": {
+    "size": [
+      1024,
+      256
+    ],
+    "tint": "multiply"
+  },
+  "trails/beam_core.png": {
+    "size": [
+      1024,
+      128
+    ],
+    "tint": "multiply"
+  },
+  "trails/arrow_trail.png": {
+    "size": [
+      1024,
+      128
+    ],
+    "tint": "multiply"
+  },
+  "particles/blink_burst.png": {
+    "size": [
+      512,
+      512
+    ],
+    "tint": "baked"
+  },
+  "particles/afterimage_ghost.png": {
+    "size": [
+      512,
+      256
+    ],
+    "tint": "baked"
+  },
+  "particles/poison_drip.png": {
+    "size": [
+      128,
+      128
+    ],
+    "tint": "baked"
+  },
+  "particles/dot_tick.png": {
+    "size": [
+      128,
+      128
+    ],
+    "tint": "baked"
+  },
+  "particles/ice_shard_a.png": {
+    "size": [
+      128,
+      128
+    ],
+    "tint": "baked"
+  },
+  "particles/ice_shard_b.png": {
+    "size": [
+      128,
+      128
+    ],
+    "tint": "baked"
+  },
+  "particles/ice_shard_c.png": {
+    "size": [
+      128,
+      128
+    ],
+    "tint": "baked"
+  },
+  "rings/frost_ring.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "baked"
+  },
+  "rings/rune_circle.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "baked"
+  },
+  "particles/flash.png": {
+    "size": [
+      256,
+      256
+    ],
+    "tint": "multiply"
+  },
+  "particles/soft_glow.png": {
+    "size": [
+      256,
+      256
+    ],
+    "tint": "multiply"
+  },
+  "particles/spark_streak.png": {
+    "size": [
+      256,
+      64
+    ],
+    "tint": "multiply"
+  },
+  "particles/spark_core.png": {
+    "size": [
+      64,
+      64
+    ],
+    "tint": "multiply"
+  },
+  "particles/ember.png": {
+    "size": [
+      128,
+      128
+    ],
+    "tint": "baked"
+  },
+  "particles/dust.png": {
+    "size": [
+      128,
+      128
+    ],
+    "tint": "baked"
+  },
+  "particles/strike_flash.png": {
+    "size": [
+      512,
+      512
+    ],
+    "tint": "multiply"
+  },
+  "particles/impact_ring.png": {
+    "size": [
+      512,
+      512
+    ],
+    "tint": "multiply"
+  },
+  "decals/tele_circle.png": {
+    "size": [
+      512,
+      512
+    ],
+    "tint": "multiply"
+  },
+  "decals/tele_cone.png": {
+    "size": [
+      512,
+      512
+    ],
+    "tint": "multiply"
+  },
+  "decals/tele_line.png": {
+    "size": [
+      256,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "magic/portal_swirl.png": {
+    "size": [
+      512,
+      512
+    ],
+    "tint": "baked"
+  },
+  "particles/crit_starburst.png": {
+    "size": [
+      512,
+      512
+    ],
+    "tint": "multiply"
+  },
+  "particles/debris_chunk_2.png": {
+    "size": [
+      256,
+      256
+    ],
+    "tint": "baked"
+  },
+  "particles/debris_chunk_3.png": {
+    "size": [
+      256,
+      256
+    ],
+    "tint": "baked"
+  },
+  "particles/debris_chunk_4.png": {
+    "size": [
+      256,
+      256
+    ],
+    "tint": "baked"
+  },
+  "contrast/spin_dark.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "contrast/slash_dark.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "contrast/burst_dark.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "contrast/ring_dark.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "contrast/crack_dark.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "contrast/bolt_dark.png": {
+    "size": [
+      512,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "contrast/splash_dark.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "contrast/pillar_dark.png": {
+    "size": [
+      256,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "contrast/shield_dark.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "contrast/halo_dark.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "contrast/trail_dark.png": {
+    "size": [
+      1024,
+      256
+    ],
+    "tint": "multiply"
+  },
+  "contrast/arrow_dark.png": {
+    "size": [
+      256,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "contrast/beam_dark.png": {
+    "size": [
+      1024,
+      128
+    ],
+    "tint": "multiply"
+  },
+  "contrast/frost_dark.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "multiply"
+  },
+  "contrast/blink_dark.png": {
+    "size": [
+      512,
+      512
+    ],
+    "tint": "multiply"
+  },
+  "contrast/glow_dark.png": {
+    "size": [
+      256,
+      256
+    ],
+    "tint": "multiply"
+  },
+  "contrast/flash_dark.png": {
+    "size": [
+      256,
+      256
+    ],
+    "tint": "multiply"
+  },
+  "contrast/comet_dark.png": {
+    "size": [
+      512,
+      512
+    ],
+    "tint": "multiply"
+  },
+  "flipbooks/explosion_8x8.png": {
+    "size": [
+      2048,
+      2048
+    ],
+    "tint": "baked",
+    "cols": 8,
+    "rows": 8,
+    "cell": 256,
+    "fps": 30
+  },
+  "flipbooks/energy_burst_8x8.png": {
+    "size": [
+      2048,
+      2048
+    ],
+    "tint": "multiply",
+    "cols": 8,
+    "rows": 8,
+    "cell": 256,
+    "fps": 30
+  },
+  "flipbooks/slash_8x8.png": {
+    "size": [
+      2048,
+      2048
+    ],
+    "tint": "multiply",
+    "cols": 8,
+    "rows": 8,
+    "cell": 256,
+    "fps": 30
+  },
+  "flipbooks/smoke_puff_8x8.png": {
+    "size": [
+      2048,
+      2048
+    ],
+    "tint": "baked",
+    "cols": 8,
+    "rows": 8,
+    "cell": 256,
+    "fps": 24
+  },
+  "flipbooks/poison_cloud_8x8.png": {
+    "size": [
+      1024,
+      1024
+    ],
+    "tint": "baked",
+    "cols": 8,
+    "rows": 8,
+    "cell": 128,
+    "fps": 20
+  }
+}
