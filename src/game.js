@@ -67,6 +67,7 @@ import { mountDonationBillboards } from './world/donationBillboard.js';
 import { mountUmbrellaSystem } from './entities/umbrellaVendor.js';
 import { addDogPark } from './world/dogPark.js';
 import { mountPerfMem } from './perf/index.js'; // [perf-memory]
+import { toonEnabled, installToonStyle } from './render/toonStyle.js'; // [toon]
 import { mountStationCafe, updateStarbucksDoor } from './world/starbucksGlass.js';
 import { addTrashBins } from './world/trashBins.js';
 import { addStrayCats } from './world/strayCats.js';
@@ -3304,6 +3305,8 @@ function frameBody() {
   memHud.tick();
   requestAnimationFrame(frame);
 }
+// [toon] 정자역 주변 툰. 재질 훅을 인스턴서보다 먼저 붙여야 단색 배치가 빠지지 않는다. ?toon=0 이면 건너뜀
+const toonInfo = toonEnabled(params) ? installToonStyle({ scene, station: st, params }) : null;
 // [perf-memory] 정적 병합·인스턴싱·먼 소품 숨기기 (?perfmem=0 이면 null, 예전과 같음). 첫 프레임 전에 한 번
 const perfMem = mountPerfMem({ scene, renderer, camera, params, getPlayer: () => player, corridor, bikes });
 if (propShadowsEnabled(params)) {
@@ -3325,6 +3328,7 @@ window.__jj = {
   sanitizeLook,
   wake: () => wakeFromAfk(), // [myeongdong] 스크린샷 스크립트: 느린 렌더에서 자동 AFK(Zzz) 풀기
   perfmem: perfMem, // [perf-memory]
+  toon: toonInfo, // [toon]
 ready: bootReady, region, tower, renderer, corridor, namsan: corridor?.namsan || null, hangang: corridor?.hangang || null, myeongdong: corridor?.myeongdong || null, seongsu: corridor?.seongsu || null, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, liveBus, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt] [livebus] [namsan]
   placeCaption: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night]
 

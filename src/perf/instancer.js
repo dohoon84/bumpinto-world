@@ -8,6 +8,7 @@
 //   - 1초마다 루트를 다시 훑어 (컵·우산처럼) 나중에 붙은 부품이나 바뀐 재질을 따라간다.
 import * as THREE from 'three';
 import { setHidden, repairClone } from './hide.js';
+import { applyToonMaterial, toonEnabled } from '../render/toonStyle.js'; // [toon]
 
 const R = 'inst';
 const RF = 'instfar'; // [jamsil-perf]
@@ -19,7 +20,8 @@ const OK_TYPES = new Set(['MeshLambertMaterial', 'MeshBasicMaterial', 'MeshPhong
 export function materialInstanceable(m) {
   if (!m || Array.isArray(m) || !OK_TYPES.has(m.type)) return false;
   if (m.transparent || m.opacity !== 1 || m.alphaTest > 0 || m.alphaHash || m.wireframe) return false;
-  if (m.onBeforeCompile !== BASE_OBC || (m.onBeforeRender && m.onBeforeRender !== BASE_OBR_M)) return false;
+  // [toon] 정자 반경 툰 훅은 월드 좌표 마스크라 인스턴스마다 다르게 보여도 재질은 공유 가능
+  if ((m.onBeforeCompile !== BASE_OBC && !m.userData?.toonPatched) || (m.onBeforeRender && m.onBeforeRender !== BASE_OBR_M)) return false;
   if (m.clippingPlanes?.length || m.blending !== THREE.NormalBlending || !m.visible) return false;
   return true;
 }
@@ -55,6 +57,8 @@ export function createInstancer(scene, { name = 'perfInstanced', pixelCull = fal
   const parts = new Map(); // key -> { geo, mat, lam, cast, recv, im, cap, n }
   const roots = new Map(); // root -> { list, r, active }
   const white = new THREE.MeshLambertMaterial({ color: '#ffffff' });
+  if (toonEnabled()) applyToonMaterial(white); // [toon] 인스턴스 단색도 반경 안에서 같은 명암
+
   const stats = { roots: 0, parts: 0, instances: 0, drawnRoots: 0, culledRoots: 0, tinyRoots: 0, meshesHidden: 0, syncMs: 0, rescans: 0, rescanStale: 0, rescanCount: 0, lastStale: '' };
   const frustum = new THREE.Frustum(), pm = new THREE.Matrix4(), sph = new THREE.Sphere(), v = new THREE.Vector3();
   let rescanAcc = 0, lastT = -1;
