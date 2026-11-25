@@ -526,7 +526,7 @@ function drawDepotInside(J) {
   const g = ctx; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, D, D);
   g.save(); g.beginPath(); g.arc(R, R, R, 0, Math.PI * 2); g.clip();
   g.fillStyle = 'rgba(8, 16, 30, .9)'; g.fillRect(0, 0, D, D);
-  try { J.depot.mmDraw(g, R); } catch { /* */ }
+  try { J.depot?.mmDraw?.(g, R); } catch { /* */ }
   g.restore(); sig = ''; setCompass(0);
 }
 let lastFull = 0, lastEvict = 0;

@@ -737,7 +737,7 @@ const subway = subwayOn ? mountSubway({
   },
 }) : null;
 // [bump24game] BUMP24 장보기 미니게임. 정자점은 기본 주소에서도 문 앞 안내. 시청점은 ?bp24game=1. 지하철과 같이 별도 Scene.
-const bump24Game = mountBump24Game({
+const bump24Game = region.id === 'jeongja' ? mountBump24Game({
   renderer, params, getPlayer: () => player, getCorridor: () => corridor, getCamera: () => camera,
   getAudioLevel: () => (bgm ? { muted: bgm.player.muted, volume: bgm.player.volume } : null),
   getSelfName: () => { try { return presence?.me?.name || '나'; } catch { return '나'; } }, // presence 는 아래에서 만들어짐(TDZ) → 초기화 전이면 기본값
@@ -754,7 +754,7 @@ const bump24Game = mountBump24Game({
     myBubble.item.zone = zone;
     if (zone) emitMyStateNow();
   },
-});
+}) : null;
 if (bump24Game) { const withB24 = world.isBlocked; world.isBlocked = (x, z, r) => withB24(x, z, r) || bump24Game.blocks(x, z, r); } // [bump24game] 랭킹 토템
 // [arcade] BUMP 오락실 서현점 · 범핑팡 (?arcade=0 끔)
 // [arcade] 모바일은 presence join 전에도 문 앞 탭 입장이 되어야 함 → joined 불필요. 탈것·지하철·BUMP24 충돌만 막음.
@@ -781,13 +781,15 @@ const attachArcade = (game) => {
   arcadeGame = game;
   if (arcadeGame) { const withArc = world.isBlocked; world.isBlocked = (x, z, r) => withArc(x, z, r) || arcadeGame.blocks(x, z, r); }
 };
-const arcadeModP = import('./arcade/index.js');
-if (!bootFast || arcadeAtSpot(atQuery)) {
-  attachArcade((await arcadeModP).mountArcade(arcadeOpts));
-} else {
-  arcadeModP.then((m) => attachArcade(m.mountArcade(arcadeOpts))).catch((e) => console.warn('[arcade]', e));
+if (region.id === 'jeongja') {
+  const arcadeModP = import('./arcade/index.js');
+  if (!bootFast || arcadeAtSpot(atQuery)) {
+    attachArcade((await arcadeModP).mountArcade(arcadeOpts));
+  } else {
+    arcadeModP.then((m) => attachArcade(m.mountArcade(arcadeOpts))).catch((e) => console.warn('[arcade]', e));
+  }
 }
-// [depot] 범창고(BUMP DEPOT) 정자점 — 바깥은 외피만, 안(선반·상품·카트·물리)은 들어갈 때 지연 로드하고 나오면 해제. ?depot=0 끔.
+// [depot] 범창고(BUMP DEPOT) 정자점 — 바깥은 외피만, 안(선반·상품·카트·물리)은 들어갈 때 지연 로드하고 나오면 해제. 정자만(?depot=0 끔).
 let worldParkedForDepot = false;
 let worldCpuDropped = false;
 function rebuildJeongjaWorld() {
@@ -856,7 +858,7 @@ function parkWorldForDepot(on) {
     }
   }
 }
-const depot = mountDepot({
+const depot = region.id === 'jeongja' ? mountDepot({
   renderer, scene, params, overlay, getPlayer: () => player, isMobile: mobileMode, // [depot-ext] overlay = 이름표
   groundY: terrain ? (x, z) => terrain.getGroundHeight(x, z, 0) : null,
   canEnter: () => subwayCanEnter() && !subway?.active && !bump24Game?.active && !arcadeGame?.active,
@@ -872,23 +874,23 @@ const depot = mountDepot({
     myBubble.item.zone = zone;
     if (zone) emitMyStateNow();
   },
-});
+}) : null;
 if (depot) { const withDepot = world.isBlocked; world.isBlocked = (x, z, r) => withDepot(x, z, r) || depot.blocks(x, z, r); }
 const underpass = region.id === 'jeongja' && subwayOn ? mountUnderpass({ scene, overlay, terrain, getPlayer: () => player }) : null; // [depot-underpass] ?underpass=0 끔 (스텐실 구멍은 subway 와 같은 renderer 설정)
 if (underpass) { const withUp = world.isBlocked; world.isBlocked = (x, z, r) => withUp(x, z, r) || underpass.blocks(x, z, r); }
 const gyeongbuSoon = corridor && !corridorData?.gangnam ? mountGyeongbuSoon({ getPos: () => player.position, params, isEn }) : null; // [gyeongbu] 강남이 열려 있으면 본선이 이어지므로 안내하지 않음
-const seoulToll = mountSeoulToll(scene, location.search); // [gyeongbu-bus] 궁내동 서울요금소 (?seoultg=0 끔)
+const seoulToll = region.id === 'jeongja' ? mountSeoulToll(scene, location.search) : null; // [gyeongbu-bus] 궁내동 서울요금소 (?seoultg=0 끔). 정자 전용(스타베이스 좌표와 겹침)
 void seoulToll;
-const cheonggyeTerrain = mountCheonggyeTerrain(scene, { search: location.search, expressPts: corridorData?.gangnamExpress?.pts }); // [gyeongbu-bus] 판교–양재 청계산 지형 (?cgterrain=0 끔)
+const cheonggyeTerrain = region.id === 'jeongja' ? mountCheonggyeTerrain(scene, { search: location.search, expressPts: corridorData?.gangnamExpress?.pts }) : null; // [gyeongbu-bus] 판교–양재 청계산 지형 (?cgterrain=0 끔)
 void cheonggyeTerrain;
 if (subway) {
   const withSubway = world.isBlocked;
   world.isBlocked = (x, z, r) => withSubway(x, z, r) || subway.blocks(x, z, r);
 }
-const bp24Nav = mountBp24Nav({ // [bp24nav] ?bp24nav=0 이면 null. 매장 아이콘·정자점 표지·이정표
+const bp24Nav = region.id === 'jeongja' ? mountBp24Nav({ // [bp24nav] ?bp24nav=0 이면 null. 매장 아이콘·정자점 표지·이정표
   scene, overlay, world, station: data.station, terrain, search: params, getPlayer: () => player,
   getExits: () => subway?.exits || [],
-});
+}) : null;
 const presence = createPresence({ station: st, region });
 if (npcs.guard) presence.setGuard?.(npcs.guard);
 const remotes = new RemotePlayers(scene, overlay, presence, () => selfPos(), (t) => myBubble.say(t, 6000), terrain?.getGroundHeight, emoteFx); // [terrain] 원격 플레이어도 지형 높이
@@ -1463,7 +1465,7 @@ function jeongjaBump24Spot() {
   return { x, z, face: info.face, yawIn: info.yawIn };
 }
 function landBump24Jeongja() {
-  if (atQuery !== BUMP24_JEONGJA_AT) return false;
+  if (region.id !== 'jeongja' || atQuery !== BUMP24_JEONGJA_AT) return false;
   const spot = jeongjaBump24Spot();
   if (!spot) return false;
   player.position.set(spot.x, terrain ? terrain.getGroundHeight(spot.x, spot.z, 0) : 0, spot.z);
@@ -1473,6 +1475,7 @@ function landBump24Jeongja() {
   return true;
 }
 function landArcade() {
+  if (region.id !== 'jeongja') return false; // 서현·정자점 좌표가 스타베이스에 나타나지 않게
   const spot = arcadeAtSpot(atQuery);
   if (!spot) return false;
   player.position.set(spot.x, terrain ? terrain.getGroundHeight(spot.x, spot.z, 0) : 0, spot.z);
@@ -1481,8 +1484,8 @@ function landArcade() {
   setViewMode('follow');
   return true;
 }
-function landDepot() { // [depot] ?at=depot → 범창고 입구 앞
-  if (atQuery !== DEPOT_AT || !depot) return false;
+function landDepot() { // [depot] ?at=depot → 범창고 입구 앞. 정자가 아니면 무시
+  if (region.id !== 'jeongja' || atQuery !== DEPOT_AT || !depot) return false;
   const { x, z } = DEPOT_SPAWN;
   player.position.set(x, terrain ? terrain.getGroundHeight(x, z, 0) : 0, z);
   player.rotation.y = DEPOT_SPAWN.yaw;
@@ -1491,7 +1494,7 @@ function landDepot() { // [depot] ?at=depot → 범창고 입구 앞
   return true;
 }
 function landBump24At() {
-  if (!atQuery || atQuery === BUMP24_JEONGJA_AT) return false;
+  if (region.id !== 'jeongja' || !atQuery || atQuery === BUMP24_JEONGJA_AT) return false;
   const spot = bump24AtSpot(atQuery);
   if (!spot) return false;
   const st = jeongjaBp24Prep.find((s) => s.id === spot.id);
